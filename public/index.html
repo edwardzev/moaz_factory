@@ -10,7 +10,7 @@
       font-family: system-ui, -apple-system, BlinkMacSystemFont, Arial, sans-serif;
       margin: 20px;
       background: #fafafa;
-      font-size: 32px;
+      font-size: 22px;
     }
 
     h2 {
@@ -26,8 +26,8 @@
     }
 
     input, select, button {
-      padding: 16px 20px;
-      font-size: 28px;
+      padding: 12px 14px;
+      font-size: 20px;
     }
 
     button {
@@ -42,7 +42,7 @@
 
     th, td {
       border: 1px solid #ddd;
-      padding: 16px;
+      padding: 12px;
       vertical-align: top;
     }
 
@@ -58,7 +58,7 @@
 
     .muted {
       color: #666;
-      font-size: 24px;
+      font-size: 17px;
     }
 
     .pill {
@@ -66,7 +66,7 @@
       padding: 2px 8px;
       border: 1px solid #ccc;
       border-radius: 999px;
-      font-size: 24px;
+      font-size: 17px;
       background: #fff;
     }
 
@@ -77,7 +77,7 @@
     }
 
     .status {
-      font-size: 26px;
+      font-size: 18px;
       color: #444;
     }
 
@@ -102,6 +102,7 @@
       max-height: 88vh;
       overflow: hidden;
       border: 1px solid #ddd;
+      font-size: 2em;
     }
 
     .modal-header {
@@ -115,7 +116,7 @@
     }
 
     .modal-title {
-      font-size: 28px;
+      font-size: inherit;
       font-weight: 600;
       color: #222;
       overflow: hidden;
@@ -139,7 +140,7 @@
 
     .modal-close {
       padding: 6px 10px;
-      font-size: 28px;
+      font-size: inherit;
     }
   </style>
 </head>
@@ -163,6 +164,8 @@
         <th style="width:220px;">Job Name</th>
         <th style="width:180px;">Outsource South</th>
         <th style="width:220px;">Mock up</th>
+        <th style="width:160px;">Method</th>
+        <th style="width:160px;">Cartons IN -</th>
         <th style="width:110px;">Impressions</th>
         <th style="width:110px;">Left</th>
         <th style="width:120px;">Machine</th>
@@ -172,7 +175,7 @@
     </thead>
     <tbody id="tbody">
       <tr>
-        <td colspan="10" class="muted">Loading…</td>
+        <td colspan="12" class="muted">Loading…</td>
       </tr>
     </tbody>
   </table>

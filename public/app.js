@@ -67,7 +67,7 @@ document.addEventListener("keydown", (e) => {
 
 function render(rows) {
   if (!rows.length) {
-    tbody.innerHTML = `<tr><td colspan="10" class="muted">No records</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="12" class="muted">No records</td></tr>`;
     return;
   }
 
@@ -123,6 +123,10 @@ function render(rows) {
       <td class="job-emph">${escapeHtml(r.jobName ?? "")}</td>
       <td>${escapeHtml(r.outsourceSouth ?? "")}</td>
       <td style="max-width:240px;">${mockupsCell(r.mockup)}</td>
+      <td>${escapeHtml(r.method ?? "")}</td>
+      <td>
+        <input class="cartons" type="number" min="0" step="1" placeholder="0" style="width:120px" value="${escapeHtml(r.cartonsIn ?? "")}"/>
+      </td>
       <td class="right">${escapeHtml(r.impressions)}</td>
       <td class="right"><strong>${escapeHtml(r.impr_left ?? "")}</strong></td>
       <td>
@@ -167,7 +171,7 @@ async function load() {
   } catch (e) {
     setStatus("Error");
     setError(e?.message || String(e));
-    tbody.innerHTML = `<tr><td colspan="10" class="muted">Failed to load</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="12" class="muted">Failed to load</td></tr>`;
   }
 }
 
@@ -182,40 +186,66 @@ async function onSave(rowEl) {
   const qtyEl = rowEl.querySelector(".qty");
   const machineEl = rowEl.querySelector(".machine");
   const btn = rowEl.querySelector(".save");
+  const cartonsEl = rowEl.querySelector(".cartons");
 
-  const qty = Number(qtyEl.value);
+  const qtyRaw = qtyEl.value;
+  const qty = Number(qtyRaw);
   const machine = Number(machineEl.value);
 
-  if (!qty || qty <= 0) return alert("Enter a valid Done Qty");
-  if (![6,8,10].includes(machine)) return alert("Select machine (6 / 8 / 10)");
+  const cartonsRaw = cartonsEl?.value;
+  const cartons = cartonsRaw === "" ? null : Number(cartonsRaw);
+
+  const hasQty = qtyRaw !== "" && !isNaN(qty) && qty > 0;
+  const hasCartons = cartonsRaw !== "" && cartons !== null && !isNaN(cartons) && cartons >= 0;
+
+  if (!hasQty && !hasCartons) {
+    return alert("Enter Done Qty and/or Cartons IN -");
+  }
+  if (hasQty && ![6, 8, 10].includes(machine)) {
+    return alert("Select machine (6 / 8 / 10)");
+  }
 
   btn.disabled = true;
   btn.textContent = "Saving…";
   setError("");
 
   try {
-    const r = await fetch("/api/log", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ id, qty, machine })
-    });
+    if (hasCartons) {
+      const rCartons = await fetch("/api/cartons", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id, cartons })
+      });
 
-    if (!r.ok) {
-      const t = await r.text();
-      throw new Error(`POST /api/log failed (${r.status})\n${t}`);
+      if (!rCartons.ok) {
+        const t = await rCartons.text();
+        throw new Error(`POST /api/cartons failed (${rCartons.status})\n${t}`);
+      }
     }
 
-    // Optimistic UI update (append log preview)
-    const logCell = rowEl.querySelector(".log");
-    const stamp = `${nowStamp()} - ${qty} - ${machine}`;
-    logCell.innerHTML = (logCell.innerHTML.includes("—") ? "" : logCell.innerHTML + "<br/>") + escapeHtml(stamp);
+    if (hasQty) {
+      const r = await fetch("/api/log", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id, qty, machine })
+      });
 
-    // Clear inputs
-    qtyEl.value = "";
-    machineEl.value = "";
+      if (!r.ok) {
+        const t = await r.text();
+        throw new Error(`POST /api/log failed (${r.status})\n${t}`);
+      }
+
+      // Optimistic UI update (append log preview)
+      const logCell = rowEl.querySelector(".log");
+      const stamp = `${nowStamp()} - ${qty} - ${machine}`;
+      logCell.innerHTML = (logCell.innerHTML.includes("—") ? "" : logCell.innerHTML + "<br/>") + escapeHtml(stamp);
+
+      // Clear inputs
+      qtyEl.value = "";
+      machineEl.value = "";
+    }
 
     setStatus("Saved");
-    // Reload data to sync Impr_left
     await load();
   } catch (e) {
     setError(e?.message || String(e));
