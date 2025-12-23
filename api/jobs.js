@@ -22,6 +22,10 @@ export default async function handler(req, res) {
     data.records.map(rec => ({
       id: rec.id,
       jobId: rec.fields["JOB ID"],
+      clientName: rec.fields["Client name"] ?? "",
+      jobName: rec.fields["Job Name"] ?? "",
+      // Airtable attachment field: array of { id, url, filename, type, thumbnails, ... }
+      mockup: Array.isArray(rec.fields["Mock up"]) ? rec.fields["Mock up"] : [],
       impressions: rec.fields["Impressions"],
       // If Impr_left is blank/undefined, default it to the original
       // `Impressions` value (initial quantity). This treats an empty

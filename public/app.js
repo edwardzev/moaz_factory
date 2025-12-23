@@ -29,13 +29,53 @@ function fmtLogPreview(log) {
 
 function render(rows) {
   if (!rows.length) {
-    tbody.innerHTML = `<tr><td colspan="6" class="muted">No records</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="9" class="muted">No records</td></tr>`;
     return;
   }
+
+  const mockupsCell = (mockups) => {
+    const items = Array.isArray(mockups) ? mockups : [];
+    if (!items.length) return `<span class="muted">—</span>`;
+
+    return items
+      .map((a) => {
+        const url = a?.url;
+        const filename = a?.filename || "file";
+        if (!url) return "";
+
+        const thumb =
+          a?.thumbnails?.small?.url ||
+          a?.thumbnails?.large?.url ||
+          a?.thumbnails?.full?.url ||
+          null;
+
+        const img = thumb
+          ? `<img src="${escapeHtml(thumb)}" alt="${escapeHtml(filename)}" style="width:56px;height:auto;border:1px solid #ddd;"/>`
+          : `<span class="pill">${escapeHtml(filename)}</span>`;
+
+        // View opens in a new tab. Download uses `download` attr (may be ignored by some browsers for cross-origin).
+        return `
+          <div style="display:inline-block;margin-right:8px;margin-bottom:6px;vertical-align:top;">
+            <a href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer" title="View ${escapeHtml(filename)}">
+              ${img}
+            </a>
+            <div style="margin-top:4px;">
+              <a href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer" class="muted" style="text-decoration:underline;">view</a>
+              <span class="muted"> · </span>
+              <a href="${escapeHtml(url)}" download class="muted" style="text-decoration:underline;">download</a>
+            </div>
+          </div>
+        `;
+      })
+      .join("");
+  };
 
   tbody.innerHTML = rows.map(r => `
     <tr data-id="${r.id}">
       <td><span class="pill">${escapeHtml(r.jobId)}</span></td>
+      <td>${escapeHtml(r.clientName ?? "")}</td>
+      <td>${escapeHtml(r.jobName ?? "")}</td>
+      <td style="max-width:240px;">${mockupsCell(r.mockup)}</td>
       <td class="right">${escapeHtml(r.impressions)}</td>
       <td class="right"><strong>${escapeHtml(r.impr_left ?? "")}</strong></td>
       <td>
@@ -80,7 +120,7 @@ async function load() {
   } catch (e) {
     setStatus("Error");
     setError(e?.message || String(e));
-    tbody.innerHTML = `<tr><td colspan="6" class="muted">Failed to load</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="9" class="muted">Failed to load</td></tr>`;
   }
 }
 
