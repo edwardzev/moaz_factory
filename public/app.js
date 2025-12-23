@@ -11,6 +11,46 @@ const viewerClose = document.getElementById("viewerClose");
 
 let allRows = [];
 
+const GROUP_ORDER = [
+  "outsource south",
+  "prepared to send south",
+  "delivered south",
+  "in work south",
+  "finished south",
+  "arrived to pm",
+];
+const GROUP_WEIGHT = new Map(GROUP_ORDER.map((k, i) => [k, i]));
+
+function normStatus(s) {
+  return String(s ?? "")
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, " ");
+}
+
+function statusKey(s) {
+  const n = normStatus(s);
+  if (!n) return "other";
+
+  // Tolerate spelling/casing variations and current Airtable values.
+  if (n === "outsourse south") return "outsource south";
+  if (n === "delivered to south") return "delivered south";
+  if (n === "fininshed south") return "finished south";
+
+  return n;
+}
+
+function groupWeightFor(key) {
+  return GROUP_WEIGHT.has(key) ? GROUP_WEIGHT.get(key) : 999;
+}
+
+function slugifyGroup(key) {
+  return String(key || "other")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/(^-|-$)/g, "") || "other";
+}
+
 function setStatus(msg) {
   statusEl.textContent = msg;
 }
@@ -158,11 +198,13 @@ function render(rows) {
   let lastGroup = null;
   const html = rows
     .map((r) => {
-      const group = String(r.outsourceSouth ?? "").trim() || "—";
-      const header = group !== lastGroup
-        ? `<tr class="group-row"><td colspan="13">${escapeHtml(group)}</td></tr>`
+      const groupLabel = String(r.outsourceSouth ?? "").trim() || "—";
+      const key = statusKey(groupLabel);
+      const groupClass = `group-${slugifyGroup(key)}`;
+      const header = groupLabel !== lastGroup
+        ? `<tr class="group-row ${groupClass}" data-group="${escapeHtml(key)}"><td colspan="13">${escapeHtml(groupLabel)}</td></tr>`
         : "";
-      lastGroup = group;
+      lastGroup = groupLabel;
       return header + rowHtml(r);
     })
     .join("");
@@ -188,10 +230,20 @@ async function load() {
     }
     const data = await r.json();
     allRows = data.sort((a, b) => {
-      const ga = String(a.outsourceSouth ?? "");
-      const gb = String(b.outsourceSouth ?? "");
+      const ka = statusKey(a.outsourceSouth);
+      const kb = statusKey(b.outsourceSouth);
+      const wa = groupWeightFor(ka);
+      const wb = groupWeightFor(kb);
+      if (wa !== wb) return wa - wb;
+
+      const ga = normStatus(a.outsourceSouth);
+      const gb = normStatus(b.outsourceSouth);
       if (ga !== gb) return ga.localeCompare(gb);
-      return Number(a.jobId) - Number(b.jobId);
+
+      const na = Number(a.jobId);
+      const nb = Number(b.jobId);
+      if (!Number.isNaN(na) && !Number.isNaN(nb)) return na - nb;
+      return String(a.jobId ?? "").localeCompare(String(b.jobId ?? ""));
     });
     applyFilter();
     setStatus(`Loaded ${allRows.length} records`);

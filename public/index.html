@@ -6,11 +6,31 @@
   <title>Ahmed Factory – Production Tracking</title>
 
   <style>
+    :root {
+      --bg: #f6f7fb;
+      --surface: #ffffff;
+      --text: #111827;
+      --muted: #6b7280;
+      --border: #e5e7eb;
+      --header: #f3f4f6;
+      --focus: rgba(59, 130, 246, 0.35);
+
+      --btn: #111827;
+      --btnText: #ffffff;
+      --btnSoft: #ffffff;
+      --btnSoftText: #111827;
+      --btnSoftBorder: #d1d5db;
+
+      --radius: 12px;
+      --radiusSm: 10px;
+    }
+
     body {
       font-family: system-ui, -apple-system, BlinkMacSystemFont, Arial, sans-serif;
       margin: 20px;
-      background: #fafafa;
+      background: var(--bg);
       font-size: 22px;
+      color: var(--text);
     }
 
     h2 {
@@ -25,36 +45,103 @@
       margin-bottom: 12px;
     }
 
-    input, select, button {
+    input, select {
       padding: 12px 14px;
       font-size: 20px;
+      border: 1px solid var(--border);
+      border-radius: var(--radiusSm);
+      background: var(--surface);
+      color: var(--text);
+      outline: none;
+      transition: box-shadow 120ms ease, border-color 120ms ease;
+    }
+    input:focus, select:focus {
+      border-color: rgba(59, 130, 246, 0.7);
+      box-shadow: 0 0 0 4px var(--focus);
     }
 
     button {
+      padding: 12px 14px;
+      font-size: 20px;
+      border-radius: var(--radiusSm);
+      border: 1px solid transparent;
+      background: var(--btn);
+      color: var(--btnText);
       cursor: pointer;
+      transition: transform 80ms ease, filter 120ms ease, background 120ms ease, border-color 120ms ease;
+    }
+    button:hover {
+      filter: brightness(1.03);
+    }
+    button:active {
+      transform: translateY(1px);
+    }
+    button:disabled {
+      opacity: 0.65;
+      cursor: not-allowed;
+    }
+
+    /* Secondary buttons inside table */
+    .product-in, .start, .save, .ready-sent {
+      background: var(--btnSoft);
+      color: var(--btnSoftText);
+      border-color: var(--btnSoftBorder);
+    }
+    .save {
+      border-color: rgba(59, 130, 246, 0.6);
+    }
+    .ready-sent {
+      border-color: rgba(16, 185, 129, 0.55);
     }
 
     table {
       border-collapse: collapse;
       width: 100%;
-      background: white;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      overflow: hidden;
     }
 
     th, td {
-      border: 1px solid #ddd;
+      border: 1px solid var(--border);
       padding: 12px;
       vertical-align: top;
     }
 
     th {
-      background: #f0f0f0;
+      background: var(--header);
       text-align: left;
       font-weight: 600;
+      position: sticky;
+      top: 0;
+      z-index: 1;
     }
 
     .group-row td {
-      background: #f0f0f0;
+      background: var(--header);
       font-weight: 600;
+      letter-spacing: 0.2px;
+    }
+
+    /* Colored group headers (class names come from public/app.js) */
+    .group-row.group-outsource-south td {
+      background: rgba(99, 102, 241, 0.14);
+    }
+    .group-row.group-prepared-to-send-south td {
+      background: rgba(245, 158, 11, 0.16);
+    }
+    .group-row.group-delivered-south td {
+      background: rgba(59, 130, 246, 0.14);
+    }
+    .group-row.group-in-work-south td {
+      background: rgba(16, 185, 129, 0.16);
+    }
+    .group-row.group-finished-south td {
+      background: rgba(34, 197, 94, 0.16);
+    }
+    .group-row.group-arrived-to-pm td {
+      background: rgba(168, 85, 247, 0.14);
     }
 
     .right {
@@ -62,17 +149,17 @@
     }
 
     .muted {
-      color: #666;
+      color: var(--muted);
       font-size: 17px;
     }
 
     .pill {
       display: inline-block;
       padding: 2px 8px;
-      border: 1px solid #ccc;
+      border: 1px solid var(--border);
       border-radius: 999px;
       font-size: 17px;
-      background: #fff;
+      background: var(--surface);
     }
 
     .error {
@@ -83,7 +170,7 @@
 
     .status {
       font-size: 18px;
-      color: #444;
+      color: #374151;
     }
 
     .job-emph {
@@ -102,11 +189,13 @@
     }
 
     .modal {
-      background: #fff;
+      background: var(--surface);
       width: min(980px, 100%);
       max-height: 88vh;
       overflow: hidden;
-      border: 1px solid #ddd;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      box-shadow: 0 18px 60px rgba(17, 24, 39, 0.25);
       font-size: 2em;
     }
 
@@ -116,8 +205,8 @@
       justify-content: space-between;
       gap: 12px;
       padding: 10px 12px;
-      border-bottom: 1px solid #eee;
-      background: #fafafa;
+      border-bottom: 1px solid var(--border);
+      background: var(--header);
     }
 
     .modal-title {
@@ -134,7 +223,7 @@
       height: 78vh;
       max-height: calc(88vh - 44px);
       overflow: auto;
-      background: #fff;
+      background: var(--surface);
     }
 
     .modal-frame {
