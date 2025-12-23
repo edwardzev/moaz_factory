@@ -6,16 +6,13 @@ export default async function handler(req, res) {
     return res.status(405).end();
   }
 
-  const { id: recordId, cartons } = req.body || {};
+  const { id: recordId, status } = req.body || {};
 
   if (!recordId) {
     return res.status(400).json({ error: "Missing record id" });
   }
-
-  // Allow 0 as a valid value
-  const cartonsNum = Number(cartons);
-  if (cartons === undefined || cartons === null || cartons === "" || isNaN(cartonsNum) || cartonsNum < 0) {
-    return res.status(400).json({ error: "Invalid cartons (must be >= 0)" });
+  if (!status || typeof status !== "string") {
+    return res.status(400).json({ error: "Missing status" });
   }
 
   const recordUrl = `https://api.airtable.com/v0/${BASE_ID}/${TABLE_ID}/${recordId}`;
@@ -28,16 +25,15 @@ export default async function handler(req, res) {
     },
     body: JSON.stringify({
       fields: {
-        "Cartons IN -": cartonsNum,
-        "Outsource South": "Delivered to South",
+        "Outsource South": status,
       },
     }),
   });
 
-  const patchText = await patchRes.text();
+  const text = await patchRes.text();
   if (!patchRes.ok) {
-    return res.status(patchRes.status).json({ error: patchText });
+    return res.status(patchRes.status).json({ error: text });
   }
 
-  res.status(200).json({ ok: true, cartons: cartonsNum });
+  res.status(200).json({ ok: true, status });
 }

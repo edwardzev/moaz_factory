@@ -67,7 +67,7 @@ document.addEventListener("keydown", (e) => {
 
 function render(rows) {
   if (!rows.length) {
-    tbody.innerHTML = `<tr><td colspan="12" class="muted">No records</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="13" class="muted">No records</td></tr>`;
     return;
   }
 
@@ -120,26 +120,33 @@ function render(rows) {
     <tr data-id="${r.id}">
       <td><span class="pill job-emph">${escapeHtml(r.jobId)}</span></td>
       <td>${escapeHtml(r.clientNameText ?? "")}</td>
-      <td class="job-emph">${escapeHtml(r.jobName ?? "")}</td>
+      <td>${escapeHtml(r.jobName ?? "")}</td>
       <td>${escapeHtml(r.outsourceSouth ?? "")}</td>
       <td style="max-width:240px;">${mockupsCell(r.mockup)}</td>
       <td>${escapeHtml(r.method ?? "")}</td>
       <td>
-        <input class="cartons" type="number" min="0" step="1" placeholder="0" style="width:120px" value="${escapeHtml(r.cartonsIn ?? "")}"/>
+        <div>
+          <div><strong>${escapeHtml(r.cartonsIn ?? "")}</strong></div>
+          <button class="product-in" type="button">Product in</button>
+        </div>
       </td>
       <td class="right">${escapeHtml(r.impressions)}</td>
       <td class="right"><strong>${escapeHtml(r.impr_left ?? "")}</strong></td>
       <td>
         <select class="machine">
           <option value="">—</option>
-          <option value="6">6</option>
-          <option value="8">8</option>
-          <option value="10">10</option>
+          <option value="6" ${String(r.rikmaMachine ?? "") === "6" ? "selected" : ""}>6</option>
+          <option value="8" ${String(r.rikmaMachine ?? "") === "8" ? "selected" : ""}>8</option>
+          <option value="10" ${String(r.rikmaMachine ?? "") === "10" ? "selected" : ""}>10</option>
         </select>
+        <button class="start" type="button">Start</button>
       </td>
       <td>
         <input class="qty" type="number" min="1" placeholder="Qty" style="width:80px"/>
         <button class="save">Save</button>
+      </td>
+      <td>
+        <button class="ready-sent" type="button">Ready Sent</button>
       </td>
       <td class="log" style="max-width:520px;">
         ${fmtLogPreview(r.impr_log)}
@@ -171,7 +178,7 @@ async function load() {
   } catch (e) {
     setStatus("Error");
     setError(e?.message || String(e));
-    tbody.innerHTML = `<tr><td colspan="12" class="muted">Failed to load</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="13" class="muted">Failed to load</td></tr>`;
   }
 }
 
@@ -181,70 +188,37 @@ function nowStamp() {
   return `${pad(d.getDate())}-${pad(d.getMonth()+1)}-${d.getFullYear()} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
-async function onSave(rowEl) {
+async function saveDone(rowEl) {
   const id = rowEl.dataset.id;
   const qtyEl = rowEl.querySelector(".qty");
-  const machineEl = rowEl.querySelector(".machine");
   const btn = rowEl.querySelector(".save");
-  const cartonsEl = rowEl.querySelector(".cartons");
 
   const qtyRaw = qtyEl.value;
   const qty = Number(qtyRaw);
-  const machine = Number(machineEl.value);
-
-  const cartonsRaw = cartonsEl?.value;
-  const cartons = cartonsRaw === "" ? null : Number(cartonsRaw);
-
-  const hasQty = qtyRaw !== "" && !isNaN(qty) && qty > 0;
-  const hasCartons = cartonsRaw !== "" && cartons !== null && !isNaN(cartons) && cartons >= 0;
-
-  if (!hasQty && !hasCartons) {
-    return alert("Enter Done Qty and/or Cartons IN -");
-  }
-  if (hasQty && ![6, 8, 10].includes(machine)) {
-    return alert("Select machine (6 / 8 / 10)");
-  }
+  if (qtyRaw === "" || isNaN(qty) || qty <= 0) return alert("Enter a valid Done Qty");
 
   btn.disabled = true;
   btn.textContent = "Saving…";
   setError("");
 
   try {
-    if (hasCartons) {
-      const rCartons = await fetch("/api/cartons", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id, cartons })
-      });
+    const r = await fetch("/api/log", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id, qty })
+    });
 
-      if (!rCartons.ok) {
-        const t = await rCartons.text();
-        throw new Error(`POST /api/cartons failed (${rCartons.status})\n${t}`);
-      }
+    if (!r.ok) {
+      const t = await r.text();
+      throw new Error(`POST /api/log failed (${r.status})\n${t}`);
     }
 
-    if (hasQty) {
-      const r = await fetch("/api/log", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id, qty, machine })
-      });
+    // Optimistic UI update (append log preview)
+    const logCell = rowEl.querySelector(".log");
+    const stamp = `${nowStamp()} - ${qty}`;
+    logCell.innerHTML = (logCell.innerHTML.includes("—") ? "" : logCell.innerHTML + "<br/>") + escapeHtml(stamp);
 
-      if (!r.ok) {
-        const t = await r.text();
-        throw new Error(`POST /api/log failed (${r.status})\n${t}`);
-      }
-
-      // Optimistic UI update (append log preview)
-      const logCell = rowEl.querySelector(".log");
-      const stamp = `${nowStamp()} - ${qty} - ${machine}`;
-      logCell.innerHTML = (logCell.innerHTML.includes("—") ? "" : logCell.innerHTML + "<br/>") + escapeHtml(stamp);
-
-      // Clear inputs
-      qtyEl.value = "";
-      machineEl.value = "";
-    }
-
+    qtyEl.value = "";
     setStatus("Saved");
     await load();
   } catch (e) {
@@ -256,8 +230,116 @@ async function onSave(rowEl) {
   }
 }
 
+function openCartonsModal(rowEl) {
+  const id = rowEl.dataset.id;
+  const jobId = rowEl.querySelector(".pill")?.textContent?.trim() || "";
+  const jobName = rowEl.children?.[2]?.textContent?.trim() || "";
+  const currentCartons = rowEl.querySelector("td:nth-child(7) strong")?.textContent?.trim() || "";
+
+  viewerTitle.textContent = `${jobId}${jobName ? ` — ${jobName}` : ""}`.trim() || "Product in";
+  viewerBody.innerHTML = `
+    <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;">
+      <label>
+        Cartons IN -
+        <input id="cartonsInput" type="number" min="0" step="1" value="${escapeHtml(currentCartons)}" style="width:180px;" />
+      </label>
+      <button id="cartonsSave" type="button">Save</button>
+    </div>
+    <div class="muted" style="margin-top:10px;">Saves cartons and sets Outsource South to Delivered to South.</div>
+  `;
+
+  viewerBackdrop.style.display = "flex";
+  viewerBackdrop.setAttribute("aria-hidden", "false");
+
+  const saveBtn = document.getElementById("cartonsSave");
+  saveBtn.addEventListener("click", async () => {
+    const input = document.getElementById("cartonsInput");
+    const cartonsRaw = input.value;
+    const cartons = Number(cartonsRaw);
+    if (cartonsRaw === "" || isNaN(cartons) || cartons < 0) return alert("Enter valid Cartons IN -");
+
+    saveBtn.disabled = true;
+    setError("");
+    try {
+      const r = await fetch("/api/cartons", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id, cartons })
+      });
+      if (!r.ok) {
+        const t = await r.text();
+        throw new Error(`POST /api/cartons failed (${r.status})\n${t}`);
+      }
+      closeViewer();
+      await load();
+    } catch (e) {
+      setError(e?.message || String(e));
+      alert("Save failed. See error above.");
+    } finally {
+      saveBtn.disabled = false;
+    }
+  }, { once: true });
+}
+
 // Events
 tbody.addEventListener("click", (e) => {
+  if (e.target.classList.contains("product-in")) {
+    const tr = e.target.closest("tr");
+    openCartonsModal(tr);
+    return;
+  }
+
+  if (e.target.classList.contains("start")) {
+    const tr = e.target.closest("tr");
+    const id = tr.dataset.id;
+    const machine = Number(tr.querySelector(".machine")?.value);
+    if (![6, 8, 10].includes(machine)) return alert("Select machine (6 / 8 / 10)");
+
+    e.target.disabled = true;
+    setError("");
+    fetch("/api/start", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id, machine })
+    })
+      .then(async (r) => {
+        if (!r.ok) throw new Error(await r.text());
+        await load();
+      })
+      .catch((err) => {
+        setError(err?.message || String(err));
+        alert("Start failed. See error above.");
+      })
+      .finally(() => {
+        e.target.disabled = false;
+      });
+    return;
+  }
+
+  if (e.target.classList.contains("ready-sent")) {
+    const tr = e.target.closest("tr");
+    const id = tr.dataset.id;
+    e.target.disabled = true;
+    setError("");
+    fetch("/api/status", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id, status: "Arrived to PM" })
+    })
+      .then(async (r) => {
+        if (!r.ok) throw new Error(await r.text());
+        await load();
+      })
+      .catch((err) => {
+        setError(err?.message || String(err));
+        alert("Ready Sent failed. See error above.");
+      })
+      .finally(() => {
+        e.target.disabled = false;
+      });
+    return;
+  }
+
   if (e.target.closest(".mockup-view")) {
     e.preventDefault();
     const el = e.target.closest(".mockup-view");
@@ -293,7 +375,7 @@ tbody.addEventListener("click", (e) => {
 
   if (e.target.classList.contains("save")) {
     const tr = e.target.closest("tr");
-    onSave(tr);
+    saveDone(tr);
   }
 });
 searchEl.addEventListener("input", applyFilter);
