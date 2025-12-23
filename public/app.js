@@ -4,6 +4,11 @@ const errEl = document.getElementById("error");
 const searchEl = document.getElementById("search");
 const refreshBtn = document.getElementById("refreshBtn");
 
+const viewerBackdrop = document.getElementById("viewerBackdrop");
+const viewerTitle = document.getElementById("viewerTitle");
+const viewerBody = document.getElementById("viewerBody");
+const viewerClose = document.getElementById("viewerClose");
+
 let allRows = [];
 
 function setStatus(msg) {
@@ -27,6 +32,39 @@ function fmtLogPreview(log) {
   return escapeHtml(log).replaceAll("\n", "<br/>");
 }
 
+function openViewer({ jobId, jobName, url, filename, mime }) {
+  const title = `${jobId ?? ""}${jobName ? ` — ${jobName}` : ""}`.trim();
+  viewerTitle.textContent = title || "Preview";
+
+  const safeUrl = String(url || "");
+  const safeFilename = String(filename || "file");
+  const safeMime = String(mime || "");
+
+  // Basic file preview: images render as <img>; otherwise use <iframe>.
+  const isImage = safeMime.startsWith("image/") || /\.(png|jpe?g|gif|webp|bmp)$/i.test(safeFilename);
+  const inner = isImage
+    ? `<img src="${escapeHtml(safeUrl)}" alt="${escapeHtml(safeFilename)}" style="max-width:100%;height:auto;"/>`
+    : `<iframe class="modal-frame" src="${escapeHtml(safeUrl)}" title="${escapeHtml(safeFilename)}"></iframe>`;
+
+  viewerBody.innerHTML = inner;
+  viewerBackdrop.style.display = "flex";
+  viewerBackdrop.setAttribute("aria-hidden", "false");
+}
+
+function closeViewer() {
+  viewerBackdrop.style.display = "none";
+  viewerBackdrop.setAttribute("aria-hidden", "true");
+  viewerBody.innerHTML = "";
+}
+
+viewerClose.addEventListener("click", closeViewer);
+viewerBackdrop.addEventListener("click", (e) => {
+  if (e.target === viewerBackdrop) closeViewer();
+});
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape" && viewerBackdrop.style.display === "flex") closeViewer();
+});
+
 function render(rows) {
   if (!rows.length) {
     tbody.innerHTML = `<tr><td colspan="9" class="muted">No records</td></tr>`;
@@ -41,6 +79,7 @@ function render(rows) {
       .map((a) => {
         const url = a?.url;
         const filename = a?.filename || "file";
+        const mime = a?.type || "";
         if (!url) return "";
 
         const thumb =
@@ -53,16 +92,23 @@ function render(rows) {
           ? `<img src="${escapeHtml(thumb)}" alt="${escapeHtml(filename)}" style="width:56px;height:auto;border:1px solid #ddd;"/>`
           : `<span class="pill">${escapeHtml(filename)}</span>`;
 
-        // View opens in a new tab. Download uses `download` attr (may be ignored by some browsers for cross-origin).
         return `
           <div style="display:inline-block;margin-right:8px;margin-bottom:6px;vertical-align:top;">
-            <a href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer" title="View ${escapeHtml(filename)}">
+            <button
+              type="button"
+              class="mockup-view"
+              data-url="${escapeHtml(url)}"
+              data-filename="${escapeHtml(filename)}"
+              data-mime="${escapeHtml(mime)}"
+              title="View ${escapeHtml(filename)}"
+              style="border:0;background:transparent;padding:0;cursor:pointer;"
+            >
               ${img}
-            </a>
+            </button>
             <div style="margin-top:4px;">
-              <a href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer" class="muted" style="text-decoration:underline;">view</a>
+              <a href="#" class="mockup-view muted" data-url="${escapeHtml(url)}" data-filename="${escapeHtml(filename)}" data-mime="${escapeHtml(mime)}" style="text-decoration:underline;">view</a>
               <span class="muted"> · </span>
-              <a href="${escapeHtml(url)}" download class="muted" style="text-decoration:underline;">download</a>
+              <a href="#" class="mockup-download muted" data-url="${escapeHtml(url)}" data-filename="${escapeHtml(filename)}" style="text-decoration:underline;">download</a>
             </div>
           </div>
         `;
@@ -73,7 +119,7 @@ function render(rows) {
   tbody.innerHTML = rows.map(r => `
     <tr data-id="${r.id}">
       <td><span class="pill">${escapeHtml(r.jobId)}</span></td>
-      <td>${escapeHtml(r.clientName ?? "")}</td>
+      <td>${escapeHtml(r.clientNameText ?? "")}</td>
       <td>${escapeHtml(r.jobName ?? "")}</td>
       <td style="max-width:240px;">${mockupsCell(r.mockup)}</td>
       <td class="right">${escapeHtml(r.impressions)}</td>
@@ -181,6 +227,39 @@ async function onSave(rowEl) {
 
 // Events
 tbody.addEventListener("click", (e) => {
+  if (e.target.closest(".mockup-view")) {
+    e.preventDefault();
+    const el = e.target.closest(".mockup-view");
+    const tr = el.closest("tr");
+    const jobId = tr?.querySelector(".pill")?.textContent?.trim() || "";
+    const jobName = tr?.children?.[2]?.textContent?.trim() || "";
+    openViewer({
+      jobId,
+      jobName,
+      url: el.dataset.url,
+      filename: el.dataset.filename,
+      mime: el.dataset.mime,
+    });
+    return;
+  }
+
+  if (e.target.closest(".mockup-download")) {
+    e.preventDefault();
+    const el = e.target.closest(".mockup-download");
+    const url = el.dataset.url;
+    const filename = el.dataset.filename || "download";
+    if (!url) return;
+
+    // Use same-origin API proxy to force a real download (Content-Disposition: attachment)
+    const a = document.createElement("a");
+    a.href = `/api/download?url=${encodeURIComponent(url)}&filename=${encodeURIComponent(filename)}`;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    return;
+  }
+
   if (e.target.classList.contains("save")) {
     const tr = e.target.closest("tr");
     onSave(tr);
