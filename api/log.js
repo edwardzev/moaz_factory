@@ -16,7 +16,7 @@ export default async function handler(req, res) {
     return res.status(405).end();
   }
 
-  const { recordId, done } = req.body;
+  const { id: recordId, qty: done, machine } = req.body;
 
   if (!recordId || !done || done <= 0) {
     return res.status(400).json({ error: "Invalid input" });
@@ -35,14 +35,15 @@ export default async function handler(req, res) {
   const fields = record.fields;
 
   const currentLeft = fields["Impr_left"];
-  const machine = fields["Rikma Machine"] ?? "N/A";
 
   if (done > currentLeft) {
     return res.status(400).json({ error: "Done exceeds left qty" });
   }
 
   const newLeft = currentLeft - done;
-  const line = `${nowIL()} - ${done} (M${machine})`;
+  const usedMachine = machine ?? fields["Rikma Machine"] ?? "N/A";
+  const line = `${nowIL()} - ${done} - ${usedMachine}`;
+
   const newLog = fields["Impr_log"]
     ? fields["Impr_log"] + "\n" + line
     : line;
