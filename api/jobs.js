@@ -1,7 +1,3 @@
-export const config = {
-  runtime: "nodejs18.x",
-};
-
 const BASE_ID = "appgJ2DCTbxQLzK2S";
 const TABLE_ID = "tbl0qSi9cbJUSa5JV";
 const VIEW_ID  = "viwzYAf6jxP7EInCl";
