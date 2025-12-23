@@ -17,10 +17,14 @@ export default async function handler(req, res) {
     return res.status(405).end();
   }
 
-  const { id: recordId, qty: done, machine } = req.body;
+  const { id: recordId, qty, machine } = req.body;
+  const done = Number(qty);
 
-  if (!recordId || !done || done <= 0) {
-    return res.status(400).json({ error: "Invalid input" });
+  if (!recordId) {
+    return res.status(400).json({ error: "Missing record id" });
+  }
+  if (!qty || isNaN(done) || done <= 0) {
+    return res.status(400).json({ error: "Invalid qty (must be > 0)" });
   }
 
   const recordUrl =
@@ -40,8 +44,12 @@ export default async function handler(req, res) {
 
   const fields = record.fields || {};
 
-  // Ensure Impr_left is treated as a number
-  const currentLeft = Number(fields["Impr_left"] ?? 0);
+  // If Impr_left is blank, fall back to the original Impressions value.
+  let rawLeft = fields["Impr_left"];
+  if (rawLeft === undefined || rawLeft === "") rawLeft = fields["Impressions"] ?? 0;
+
+  // Strip commas (thousand separators) and coerce to number
+  const currentLeft = Number(String(rawLeft).replace(/,/g, ""));
   if (isNaN(currentLeft)) {
     return res.status(500).json({ error: "Invalid Impr_left on record" });
   }
