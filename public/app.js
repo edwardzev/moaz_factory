@@ -116,7 +116,7 @@ function render(rows) {
       .join("");
   };
 
-  tbody.innerHTML = rows.map(r => `
+  const rowHtml = (r) => `
     <tr data-id="${r.id}">
       <td><span class="pill job-emph">${escapeHtml(r.jobId)}</span></td>
       <td>${escapeHtml(r.clientNameText ?? "")}</td>
@@ -126,7 +126,7 @@ function render(rows) {
       <td>${escapeHtml(r.method ?? "")}</td>
       <td>
         <div>
-          <div><strong>${escapeHtml(r.cartonsIn ?? "")}</strong></div>
+          <div><strong>${escapeHtml(r.cartonIn ?? "")}</strong></div>
           <button class="product-in" type="button">Product in</button>
         </div>
       </td>
@@ -152,7 +152,22 @@ function render(rows) {
         ${fmtLogPreview(r.impr_log)}
       </td>
     </tr>
-  `).join("");
+  `;
+
+  // Group by Outsource South
+  let lastGroup = null;
+  const html = rows
+    .map((r) => {
+      const group = String(r.outsourceSouth ?? "").trim() || "—";
+      const header = group !== lastGroup
+        ? `<tr class="group-row"><td colspan="13">${escapeHtml(group)}</td></tr>`
+        : "";
+      lastGroup = group;
+      return header + rowHtml(r);
+    })
+    .join("");
+
+  tbody.innerHTML = html;
 }
 
 function applyFilter() {
@@ -172,7 +187,12 @@ async function load() {
       throw new Error(`GET /api/jobs failed (${r.status})\n${t}`);
     }
     const data = await r.json();
-    allRows = data.sort((a, b) => Number(a.jobId) - Number(b.jobId));
+    allRows = data.sort((a, b) => {
+      const ga = String(a.outsourceSouth ?? "");
+      const gb = String(b.outsourceSouth ?? "");
+      if (ga !== gb) return ga.localeCompare(gb);
+      return Number(a.jobId) - Number(b.jobId);
+    });
     applyFilter();
     setStatus(`Loaded ${allRows.length} records`);
   } catch (e) {
@@ -240,7 +260,7 @@ function openCartonsModal(rowEl) {
   viewerBody.innerHTML = `
     <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;">
       <label>
-        Cartons IN -
+        Carton IN
         <input id="cartonsInput" type="number" min="0" step="1" value="${escapeHtml(currentCartons)}" style="width:180px;" />
       </label>
       <button id="cartonsSave" type="button">Save</button>
@@ -264,7 +284,7 @@ function openCartonsModal(rowEl) {
       const r = await fetch("/api/cartons", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id, cartons })
+        body: JSON.stringify({ id, cartonIn: cartons })
       });
       if (!r.ok) {
         const t = await r.text();

@@ -6,15 +6,15 @@ export default async function handler(req, res) {
     return res.status(405).end();
   }
 
-  const { id: recordId, cartons } = req.body || {};
+  const { id: recordId, cartonIn } = req.body || {};
 
   if (!recordId) {
     return res.status(400).json({ error: "Missing record id" });
   }
 
   // Allow 0 as a valid value
-  const cartonsNum = Number(cartons);
-  if (cartons === undefined || cartons === null || cartons === "" || isNaN(cartonsNum) || cartonsNum < 0) {
+  const cartonsNum = Number(cartonIn);
+  if (cartonIn === undefined || cartonIn === null || cartonIn === "" || isNaN(cartonsNum) || cartonsNum < 0) {
     return res.status(400).json({ error: "Invalid cartons (must be >= 0)" });
   }
 
@@ -28,7 +28,7 @@ export default async function handler(req, res) {
     },
     body: JSON.stringify({
       fields: {
-        "Cartons IN -": cartonsNum,
+        "Carton IN": cartonsNum,
         "Outsource South": "Delivered to South",
       },
     }),
@@ -39,5 +39,5 @@ export default async function handler(req, res) {
     return res.status(patchRes.status).json({ error: patchText });
   }
 
-  res.status(200).json({ ok: true, cartons: cartonsNum });
+  res.status(200).json({ ok: true, cartonIn: cartonsNum });
 }

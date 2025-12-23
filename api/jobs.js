@@ -28,7 +28,7 @@ export default async function handler(req, res) {
       // Airtable attachment field: array of { id, url, filename, type, thumbnails, ... }
       mockup: Array.isArray(rec.fields["Mock up"]) ? rec.fields["Mock up"] : [],
       method: rec.fields["Method"] ?? "",
-      cartonsIn: rec.fields["Cartons IN -"] ?? null,
+      cartonIn: rec.fields["Carton IN"] ?? null,
       impressions: rec.fields["Impressions"],
       // If Impr_left is blank/undefined, default it to the original
       // `Impressions` value (initial quantity). This treats an empty
