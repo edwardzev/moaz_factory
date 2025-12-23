@@ -59,30 +59,55 @@ export default async function handler(req, res) {
   }
 
   const newLeft = currentLeft - done;
-  const usedMachine = String(machine ?? fields["Rikma Machine"] ?? "N/A");
-  const line = `${nowIL()} - ${done} - ${usedMachine}`;
+  // Prefer a numeric machine value (6/8/10) for Airtable if possible.
+  // UI sends `machine` as a number, but we defensively coerce.
+  const machineNum = machine === undefined || machine === null || machine === ""
+    ? null
+    : Number(machine);
+  const machineForLog = machineNum !== null && !isNaN(machineNum)
+    ? String(machineNum)
+    : String(fields["Rikma Machine"] ?? "N/A");
+  const line = `${nowIL()} - ${done} - ${machineForLog}`;
 
   const newLog = fields["Impr_log"]
     ? fields["Impr_log"] + "\n" + line
     : line;
 
-  const patchRes = await fetch(recordUrl, {
-    method: "PATCH",
-    headers: {
-      Authorization: `Bearer ${process.env.AIRTABLE_TOKEN}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      fields: {
-        "Impr_left": newLeft,
-        "Impr_log": newLog,
-        // persist the machine selection back to the record so the UI can show it
-        "Rikma Machine": usedMachine,
+  async function patchAirtable(fieldsPatch) {
+    const resp = await fetch(recordUrl, {
+      method: "PATCH",
+      headers: {
+        Authorization: `Bearer ${process.env.AIRTABLE_TOKEN}`,
+        "Content-Type": "application/json",
       },
-    }),
-  });
+      body: JSON.stringify({ fields: fieldsPatch }),
+    });
 
-  const patchBody = await patchRes.text();
+    const bodyText = await resp.text();
+    return { resp, bodyText };
+  }
+
+  // 1) Try PATCH with numeric `Rikma Machine` (common case: number field)
+  // 2) If Airtable rejects (422), retry once with string value (common case: single-select)
+  const basePatch = {
+    "Impr_left": newLeft,
+    "Impr_log": newLog,
+  };
+
+  let patchAttempt = basePatch;
+  if (machineNum !== null && !isNaN(machineNum)) {
+    patchAttempt = { ...basePatch, "Rikma Machine": machineNum };
+  }
+
+  let { resp: patchRes, bodyText: patchBody } = await patchAirtable(patchAttempt);
+
+  if (!patchRes.ok && patchRes.status === 422 && machineNum !== null && !isNaN(machineNum)) {
+    ({ resp: patchRes, bodyText: patchBody } = await patchAirtable({
+      ...basePatch,
+      "Rikma Machine": String(machineNum),
+    }));
+  }
+
   if (!patchRes.ok) {
     return res.status(patchRes.status).json({ error: patchBody });
   }
