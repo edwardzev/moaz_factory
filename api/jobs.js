@@ -23,7 +23,9 @@ export default async function handler(req, res) {
       id: rec.id,
       jobId: rec.fields["JOB ID"],
       impressions: rec.fields["Impressions"],
-      impr_left: rec.fields["Impr_left"],
+      // Treat blank/undefined Impr_left as 0 so the UI and API logic
+      // can rely on a numeric value instead of an empty string.
+      impr_left: Number(rec.fields["Impr_left"] ?? 0),
       rikmaMachine: rec.fields["Rikma Machine"] ?? null,
       impr_log: rec.fields["Impr_log"] ?? ""
     }))
