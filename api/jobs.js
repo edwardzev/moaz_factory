@@ -18,14 +18,19 @@ export default async function handler(req, res) {
 
   const data = await r.json();
 
-  const records = data.records.map(rec => ({
-    id: rec.id,
-    jobId: rec.fields["JOB ID"],
-    impressions: rec.fields["Impressions"],
-    impr_left: rec.fields["Impr_left"],
-    rikmaMachine: rec.fields["Rikma Machine"] ?? null,
-    impr_log: rec.fields["Impr_log"] ?? "",
-  }));
+if (!r.ok) {
+  // Surface Airtable error instead of crashing
+  return res.status(r.status).json(data);
+}
+
+if (!Array.isArray(data.records)) {
+  return res.status(500).json({
+    error: "Unexpected Airtable response",
+    data,
+  });
+}
+
+const records = data.records.map(rec => ({
 
   res.status(200).json(records);
 }
