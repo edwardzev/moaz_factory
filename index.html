@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Ahmed Factory – Production</title>
+    <style>
+      body { font-family: system-ui, Arial; margin: 20px; }
+      .bar { display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin-bottom:12px; }
+      input, select, button { padding: 8px 10px; font-size: 14px; }
+      table { border-collapse: collapse; width: 100%; }
+      th, td { border: 1px solid #ddd; padding: 8px; vertical-align: top; }
+      th { background: #f6f6f6; text-align: left; }
+      .muted { color:#666; font-size: 12px; }
+      .right { text-align:right; }
+      .pill { display:inline-block; padding:2px 8px; border:1px solid #ddd; border-radius: 999px; font-size: 12px; }
+      .error { color:#b00020; white-space: pre-wrap; }
+    </style>
+  </head>
+  <body>
+    <h2>Production Tracking</h2>
+
+    <div class="bar">
+      <button id="refreshBtn">Refresh</button>
+      <input id="search" placeholder="Search Job ID…" />
+      <span class="muted" id="status">Idle</span>
+    </div>
+
+    <div id="error" class="error"></div>
+
+    <table>
+      <thead>
+        <tr>
+          <th style="width:120px;">Job ID</th>
+          <th style="width:110px;">Impressions</th>
+          <th style="width:110px;">Left</th>
+          <th style="width:130px;">Machine</th>
+          <th style="width:140px;">Done Qty</th>
+          <th>Log</th>
+        </tr>
+      </thead>
+      <tbody id="tbody">
+        <tr><td colspan="6" class="muted">Loading…</td></tr>
+      </tbody>
+    </table>
+
+    <script src="/app.js"></script>
+  </body>
+</html>
