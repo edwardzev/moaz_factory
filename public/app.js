@@ -67,7 +67,7 @@ document.addEventListener("keydown", (e) => {
 
 function render(rows) {
   if (!rows.length) {
-    tbody.innerHTML = `<tr><td colspan="9" class="muted">No records</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="10" class="muted">No records</td></tr>`;
     return;
   }
 
@@ -118,9 +118,10 @@ function render(rows) {
 
   tbody.innerHTML = rows.map(r => `
     <tr data-id="${r.id}">
-      <td><span class="pill">${escapeHtml(r.jobId)}</span></td>
+      <td><span class="pill job-emph">${escapeHtml(r.jobId)}</span></td>
       <td>${escapeHtml(r.clientNameText ?? "")}</td>
-      <td>${escapeHtml(r.jobName ?? "")}</td>
+      <td class="job-emph">${escapeHtml(r.jobName ?? "")}</td>
+      <td>${escapeHtml(r.outsourceSouth ?? "")}</td>
       <td style="max-width:240px;">${mockupsCell(r.mockup)}</td>
       <td class="right">${escapeHtml(r.impressions)}</td>
       <td class="right"><strong>${escapeHtml(r.impr_left ?? "")}</strong></td>
@@ -166,7 +167,7 @@ async function load() {
   } catch (e) {
     setStatus("Error");
     setError(e?.message || String(e));
-    tbody.innerHTML = `<tr><td colspan="9" class="muted">Failed to load</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="10" class="muted">Failed to load</td></tr>`;
   }
 }
 

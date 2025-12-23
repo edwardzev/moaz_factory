@@ -10,6 +10,7 @@
       font-family: system-ui, -apple-system, BlinkMacSystemFont, Arial, sans-serif;
       margin: 20px;
       background: #fafafa;
+      font-size: 32px;
     }
 
     h2 {
@@ -25,8 +26,8 @@
     }
 
     input, select, button {
-      padding: 8px 10px;
-      font-size: 14px;
+      padding: 16px 20px;
+      font-size: 28px;
     }
 
     button {
@@ -41,7 +42,7 @@
 
     th, td {
       border: 1px solid #ddd;
-      padding: 8px;
+      padding: 16px;
       vertical-align: top;
     }
 
@@ -57,7 +58,7 @@
 
     .muted {
       color: #666;
-      font-size: 12px;
+      font-size: 24px;
     }
 
     .pill {
@@ -65,7 +66,7 @@
       padding: 2px 8px;
       border: 1px solid #ccc;
       border-radius: 999px;
-      font-size: 12px;
+      font-size: 24px;
       background: #fff;
     }
 
@@ -76,8 +77,12 @@
     }
 
     .status {
-      font-size: 13px;
+      font-size: 26px;
       color: #444;
+    }
+
+    .job-emph {
+      font-size: 2em;
     }
 
     .modal-backdrop {
@@ -110,7 +115,7 @@
     }
 
     .modal-title {
-      font-size: 14px;
+      font-size: 28px;
       font-weight: 600;
       color: #222;
       overflow: hidden;
@@ -134,7 +139,7 @@
 
     .modal-close {
       padding: 6px 10px;
-      font-size: 14px;
+      font-size: 28px;
     }
   </style>
 </head>
@@ -156,6 +161,7 @@
         <th style="width:120px;">Job ID</th>
         <th style="width:160px;">Client name text</th>
         <th style="width:220px;">Job Name</th>
+        <th style="width:180px;">Outsource South</th>
         <th style="width:220px;">Mock up</th>
         <th style="width:110px;">Impressions</th>
         <th style="width:110px;">Left</th>
@@ -166,7 +172,7 @@
     </thead>
     <tbody id="tbody">
       <tr>
-        <td colspan="9" class="muted">Loading…</td>
+        <td colspan="10" class="muted">Loading…</td>
       </tr>
     </tbody>
   </table>
