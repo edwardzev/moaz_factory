@@ -1,6 +1,6 @@
 const BASE_ID  = "appgJ2DCTbxQLzK2S";
 const TABLE_ID = "tbloqSi9cbJUSa5JV";
-const VIEW_ID  = "viwe9wfbsRLqtud7c";
+const VIEW_ID  = "viwRkYqu8uDdjkNK0";
 
 export default async function handler(req, res) {
   const url =
