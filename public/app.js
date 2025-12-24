@@ -150,13 +150,13 @@ function attachmentsList(items, { jobId, jobName }) {
       if (!url) return "";
 
       const thumb =
-        a?.thumbnails?.small?.url ||
         a?.thumbnails?.large?.url ||
         a?.thumbnails?.full?.url ||
+        a?.thumbnails?.small?.url ||
         null;
 
       const preview = thumb
-        ? `<img src="${escapeHtml(thumb)}" alt="${escapeHtml(filename)}" style="width:56px;height:auto;border:1px solid #ddd;vertical-align:middle;"/>`
+        ? `<img src="${escapeHtml(thumb)}" alt="${escapeHtml(filename)}" style="width:168px;height:auto;border:1px solid #ddd;vertical-align:middle;"/>`
         : `<span class="pill">${escapeHtml(filename)}</span>`;
 
       return `
