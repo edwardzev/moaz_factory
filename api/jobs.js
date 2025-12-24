@@ -2,6 +2,32 @@ const BASE_ID  = "appgJ2DCTbxQLzK2S";
 const TABLE_ID = "tbloqSi9cbJUSa5JV";
 const VIEW_ID  = "viwRkYqu8uDdjkNK0";
 
+// Fields shown in the Job-ID popup (order matters; names must match Airtable exactly)
+const ORDER_FIELD_ORDER = [
+  "Impressions",
+  "Client name Field",
+  "Job Name",
+  "Method",
+  "Mock up",
+  "Deadline",
+  "Sample",
+  "Graphic 1",
+  "Width 1 cm",
+  "Number 1",
+  "Graphic 2",
+  "Width 2 cm",
+  "Number 2",
+  "Graphic 3",
+  "Width 3",
+  "Number 3",
+  "Graphic 4",
+  "Width 4 cm",
+  "Number 4",
+  "Manager Field",
+  "Carton IN",
+  "# of packages",
+];
+
 export default async function handler(req, res) {
   const url =
     `https://api.airtable.com/v0/${BASE_ID}/${TABLE_ID}?view=${VIEW_ID}`;
@@ -39,7 +65,13 @@ export default async function handler(req, res) {
           : rec.fields["Impr_left"]
       ),
       rikmaMachine: rec.fields["Rikma Machine"] ?? null,
-      impr_log: rec.fields["Impr_log"] ?? ""
+      impr_log: rec.fields["Impr_log"] ?? "",
+
+      // Exact Airtable-field popup payload
+      order: ORDER_FIELD_ORDER.reduce((acc, fieldName) => {
+        acc[fieldName] = rec.fields[fieldName] ?? null;
+        return acc;
+      }, {}),
     }))
   );
 }

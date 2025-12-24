@@ -11,6 +11,32 @@ const viewerClose = document.getElementById("viewerClose");
 
 let allRows = [];
 
+// Fields shown in the Job-ID popup (order matters; names must match Airtable exactly)
+const ORDER_FIELD_ORDER = [
+  "Impressions",
+  "Client name Field",
+  "Job Name",
+  "Method",
+  "Mock up",
+  "Deadline",
+  "Sample",
+  "Graphic 1",
+  "Width 1 cm",
+  "Number 1",
+  "Graphic 2",
+  "Width 2 cm",
+  "Number 2",
+  "Graphic 3",
+  "Width 3",
+  "Number 3",
+  "Graphic 4",
+  "Width 4 cm",
+  "Number 4",
+  "Manager Field",
+  "Carton IN",
+  "# of packages",
+];
+
 const GROUP_ORDER = [
   "outsource north",
   "prepared to send north",
@@ -95,6 +121,80 @@ function openViewer({ jobId, jobName, url, filename, mime }) {
   viewerBackdrop.setAttribute("aria-hidden", "false");
 }
 
+function isAirtableAttachmentArray(v) {
+  return Array.isArray(v) && v.length > 0 && typeof v[0] === "object" && v[0] && typeof v[0].url === "string";
+}
+
+function fmtScalar(v) {
+  if (v === null || v === undefined || v === "") return `<span class="muted">—</span>`;
+  if (typeof v === "boolean") return escapeHtml(v ? "Yes" : "No");
+  if (typeof v === "number") return escapeHtml(String(v));
+  return escapeHtml(String(v));
+}
+
+function attachmentsList(items, { jobId, jobName }) {
+  const arr = Array.isArray(items) ? items : [];
+  if (!arr.length) return `<span class="muted">—</span>`;
+
+  return arr
+    .map((a) => {
+      const url = a?.url;
+      const filename = a?.filename || "file";
+      const mime = a?.type || "";
+      if (!url) return "";
+
+      return `
+        <div style="margin-bottom:8px;">
+          <span class="pill">${escapeHtml(filename)}</span>
+          <span class="muted"> · </span>
+          <a href="#" class="order-attach-view muted" data-url="${escapeHtml(url)}" data-filename="${escapeHtml(filename)}" data-mime="${escapeHtml(mime)}" data-jobid="${escapeHtml(jobId ?? "")}" data-jobname="${escapeHtml(jobName ?? "")}" style="text-decoration:underline;">view</a>
+          <span class="muted"> · </span>
+          <a href="#" class="order-attach-download muted" data-url="${escapeHtml(url)}" data-filename="${escapeHtml(filename)}" style="text-decoration:underline;">download</a>
+        </div>
+      `;
+    })
+    .join("");
+}
+
+function openOrderModal(row) {
+  const jobId = row?.jobId ?? "";
+  const jobName = row?.jobName ?? "";
+  const title = `${jobId}${jobName ? ` — ${jobName}` : ""}`.trim();
+  viewerTitle.textContent = title || "Order";
+
+  const order = row?.order && typeof row.order === "object" ? row.order : {};
+  const lines = ORDER_FIELD_ORDER.map((fieldName) => {
+    const v = order[fieldName];
+    let rendered;
+
+    if (isAirtableAttachmentArray(v)) {
+      rendered = attachmentsList(v, { jobId, jobName });
+    } else if (Array.isArray(v)) {
+      rendered = v.length ? escapeHtml(v.join(", ")) : `<span class="muted">—</span>`;
+    } else {
+      rendered = fmtScalar(v);
+    }
+
+    return `
+      <tr>
+        <td style="width:260px;"><strong>${escapeHtml(fieldName)}</strong></td>
+        <td>${rendered}</td>
+      </tr>
+    `;
+  }).join("");
+
+  viewerBody.innerHTML = `
+    <div style="overflow:auto;max-height:65vh;">
+      <table style="width:100%;border-collapse:separate;border-spacing:0;">
+        <tbody>${lines}</tbody>
+      </table>
+    </div>
+  `;
+
+  viewerBackdrop.style.display = "flex";
+  viewerBackdrop.setAttribute("aria-hidden", "false");
+}
+
 function closeViewer() {
   viewerBackdrop.style.display = "none";
   viewerBackdrop.setAttribute("aria-hidden", "true");
@@ -168,7 +268,7 @@ function render(rows) {
 
   const rowHtml = (r, rowClass) => `
     <tr data-id="${r.id}" class="${escapeHtml(rowClass || "")}">
-      <td><span class="pill job-emph">${escapeHtml(r.jobId)}</span></td>
+      <td><a href="#" class="pill job-emph job-open" style="text-decoration:none;">${escapeHtml(r.jobId)}</a></td>
       <td>${escapeHtml(r.clientNameText ?? "")}</td>
       <td>${escapeHtml(r.jobName ?? "")}</td>
       <td>${escapeHtml(r.outsourceNorth ?? "")}</td>
@@ -254,6 +354,43 @@ async function load() {
 
 // Events
 tbody.addEventListener("click", (e) => {
+  if (e.target.closest(".job-open")) {
+    e.preventDefault();
+    const tr = e.target.closest("tr");
+    const id = tr?.dataset?.id;
+    const row = allRows.find(r => r.id === id);
+    if (row) openOrderModal(row);
+    return;
+  }
+
+  if (e.target.closest(".order-attach-view")) {
+    e.preventDefault();
+    const el = e.target.closest(".order-attach-view");
+    openViewer({
+      jobId: el.dataset.jobid,
+      jobName: el.dataset.jobname,
+      url: el.dataset.url,
+      filename: el.dataset.filename,
+      mime: el.dataset.mime,
+    });
+    return;
+  }
+
+  if (e.target.closest(".order-attach-download")) {
+    e.preventDefault();
+    const el = e.target.closest(".order-attach-download");
+    const url = el.dataset.url;
+    const filename = el.dataset.filename || "download";
+    if (!url) return;
+    const a = document.createElement("a");
+    a.href = `/api/download?url=${encodeURIComponent(url)}&filename=${encodeURIComponent(filename)}`;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    return;
+  }
+
   if (e.target.classList.contains("product-in")) {
     const tr = e.target.closest("tr");
     const id = tr.dataset.id;
