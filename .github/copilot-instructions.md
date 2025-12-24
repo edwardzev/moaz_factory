@@ -1,61 +1,45 @@
-<!-- Copilot / AI agent instructions for the `ahmed_factory` repo -->
+<!-- Copilot / AI agent instructions for the `moaz_factory` repo -->
 
-# Quick orientation
+# Overview
 
-- **Purpose:** Small production-tracking web app served on Vercel. Static frontend under `public/` and two serverless API routes in `api/` that proxy/modify an Airtable base.
-- **Runtime:** Vercel serverless functions (Node). API files export a default async `handler(req, res)` and use native `fetch`.
+- **Purpose:** Lightweight production-tracking web app hosted on Vercel; data lives in Airtable.
+- **Runtime:** Vercel serverless functions under `api/` + static UI under `public/`.
 
-# Important files
+# Key files
 
-- `public/index.html` — main UI (loads `/app.js`).
-- `public/app.js` — primary client logic: loads `/api/jobs`, posts to `/api/log`, optimistic UI and reloads. Prefer editing this file for frontend changes.
-- `api/jobs.js` — GET handler: reads Airtable and maps fields (see field names like `JOB ID`, `Impressions`).
-- `api/log.js` — POST handler: validates input, PATCHes the Airtable record, appends a timestamped line to `Impr_log`.
-- `README.md`, `vercel.json`, `tsconfig.json` — minimal config and hints for local dev.
+- `public/index.html` — single page UI; loads `/app.js` and includes most styling inline.
+- `public/app.js` — main client logic: fetches jobs, renders grouped table, calls API routes on button clicks.
+- `api/*.js` — serverless API routes; each exports `default async function handler(req, res)` and uses native `fetch`.
 
-# Architecture & data flow (concise)
+# Data flow (Airtable-backed)
 
-- Browser -> fetch `/api/jobs` to retrieve list (serverless GET reads Airtable, maps records).
-- Browser -> POST `/api/log` with `{ id, qty, machine }` to record progress (serverless POST patches Airtable record, updates `Impr_left` and `Impr_log`).
-- Airtable credentials are read from `process.env.AIRTABLE_TOKEN` in the API handlers.
+- Browser `GET /api/jobs` → `api/jobs.js` fetches Airtable view and maps fields into rows for the UI.
+- Browser actions call:
+  - `POST /api/start` → sets `Rikma Machine` and `Outsource North` to `In work North`.
+  - `POST /api/log` → decrements `Impr_left`, appends a timestamped line to `Impr_log`, and sets `Outsource North` to `Finished North` when `Impr_left` hits `0`.
+  - `POST /api/cartons` → sets `Carton IN` and `Outsource North` to `Delivered to North`.
+  - `POST /api/status` → sets `Outsource North` to an arbitrary status string (UI uses `Arrived to PM North`).
+- Attachments are downloaded via `GET /api/download?url=...&filename=...` (host allowlist; avoids open proxy).
 
-# Conventions and patterns to follow
+# Airtable specifics (do not rename casually)
 
-- API handlers: default export asynchronous function named `handler(req, res)`. Return JSON with `res.json(...)` and use `res.status(code).json(...)` for errors (see `api/jobs.js`, `api/log.js`).
-- Use `fetch` for external calls (no Axios). Follow existing error handling patterns: check `r.ok`, return upstream payload when appropriate.
-- Airtable integration: code currently hard-codes `BASE_ID` and `TABLE_ID`; only token is read from env. Be careful changing IDs — tests and data depend on those fields.
-- Frontend expects `id` (Airtable record id) on each row. Keep that shape when changing the API output.
-- UI files are plain ES modules / vanilla JS; there is no bundler configured. Edit `public/app.js` directly.
+- Credentials: `process.env.AIRTABLE_TOKEN` (token only). Base/table/view IDs are hard-coded in API files.
+- Field names used across routes include: `JOB ID`, `Client name text`, `Job Name`, `Outsource North`, `Mock up`, `Method`, `Carton IN`, `Impressions`, `Impr_left`, `Rikma Machine`, `Impr_log`.
+- `Impr_left` semantics: if blank/empty in Airtable, the code treats it as “no progress yet” and defaults it to `Impressions` (see `api/jobs.js` + `api/log.js`).
+- Machine field: APIs try numeric first, then retry with string on Airtable `422` (supports number vs single-select).
 
-# Local dev & deploy commands
+# Frontend conventions
 
-- Run locally with the Vercel dev CLI (no `npm` scripts are defined):
+- Keep the row shape from `api/jobs.js` stable (UI relies on `id`, `jobId`, `outsourceNorth`, `mockup`, `impr_left`, `rikmaMachine`, etc.).
+- Grouping/sorting is driven by `Outsource North` values and tolerant normalization (`statusKey()` in `public/app.js`), including known misspellings.
 
-  - Install (if needed): `pnpm install` or `npm install` (repo uses a `pnpm-lock.yaml`).
-  - Start local dev server: `npx vercel dev` or `vercel dev` (if Vercel CLI installed).
+# Local dev
 
-- Environment: set `AIRTABLE_TOKEN` in your environment or in Vercel's dashboard before running dev or deploy.
+- Run locally with Vercel CLI:
+  - `npx vercel dev`
+- Ensure `AIRTABLE_TOKEN` is set in your environment/Vercel project.
 
-# Safety notes & gotchas
+# Gotchas
 
-- There are two `app.js` files in the repo root and in `public/`. The served client script is `public/app.js` (referenced by `public/index.html`). Prefer editing `public/app.js`.
-- The API handlers perform direct `PATCH` calls to Airtable. When testing, use a disposable Airtable base or verify inputs carefully — `api/log.js` mutates `Impr_left` and appends to `Impr_log`.
-- Timezone / timestamp: `api/log.js` formats timestamps using `Asia/Jerusalem`. Keep this in mind if altering display logic.
-
-# Examples to copy/paste
-
-- Fetch jobs (server->client): see `public/app.js` load() uses `fetch('/api/jobs', { cache: 'no-store' })` and expects an array of `{ id, jobId, impressions, impr_left, rikmaMachine, impr_log }`.
-- POST logging (client->server): `fetch('/api/log', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id, qty, machine }) })` — match the same payload shape.
-
-# When you change things
-
-- If you modify API response shapes, update `public/app.js` render/format logic accordingly (search for `jobId`, `impr_left`, `impr_log`).
-- If you add dependencies, update a `package.json` scripts+deps and include a simple `dev` script that runs `vercel dev` for convenience.
-
-# Questions for the maintainer
-
-- Should Airtable `BASE_ID` / `TABLE_ID` become env vars instead of being hard-coded?
-- Do you prefer adding a `dev` script to `package.json` (e.g., `"dev":"vercel dev"`)?
-
----
-If any of these points are unclear or you want the file adjusted to your preferences (more examples, stricter rules, or different wording), tell me what to change and I'll update it.
+- Mutations are real Airtable PATCHes; avoid “testing” against production data.
+- `api/log.js` timestamps use `Asia/Jerusalem`.

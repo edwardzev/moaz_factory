@@ -92,7 +92,7 @@ export default async function handler(req, res) {
   const basePatch = {
     "Impr_left": newLeft,
     "Impr_log": newLog,
-    ...(newLeft === 0 ? { "Outsource South": "Finished South" } : {}),
+    ...(newLeft === 0 ? { "Outsource North": "Finished North" } : {}),
   };
 
   let patchAttempt = basePatch;

@@ -25,7 +25,7 @@ export default async function handler(req, res) {
     },
     body: JSON.stringify({
       fields: {
-        "Outsource South": status,
+        "Outsource North": status,
       },
     }),
   });

@@ -35,14 +35,14 @@ export default async function handler(req, res) {
   // First try: numeric machine (number field)
   let { resp, bodyText } = await patchAirtable({
     "Rikma Machine": machineNum,
-    "Outsource South": "In work South",
+    "Outsource North": "In work North",
   });
 
   // Retry: string machine (single-select)
   if (!resp.ok && resp.status === 422) {
     ({ resp, bodyText } = await patchAirtable({
       "Rikma Machine": String(machineNum),
-      "Outsource South": "In work South",
+      "Outsource North": "In work North",
     }));
   }
 

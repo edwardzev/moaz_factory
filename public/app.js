@@ -12,12 +12,12 @@ const viewerClose = document.getElementById("viewerClose");
 let allRows = [];
 
 const GROUP_ORDER = [
-  "outsource south",
-  "prepared to send south",
-  "delivered south",
-  "in work south",
-  "finished south",
-  "arrived to pm",
+  "outsource north",
+  "prepared to send north",
+  "delivered north",
+  "in work north",
+  "finished north",
+  "arrived to pm north",
 ];
 const GROUP_WEIGHT = new Map(GROUP_ORDER.map((k, i) => [k, i]));
 
@@ -32,12 +32,16 @@ function statusKey(s) {
   const n = normStatus(s);
   if (!n) return "other";
 
-  // Tolerate spelling/casing variations and current Airtable values.
-  if (n === "outsourse south") return "outsource south";
-  if (n === "delivered to south") return "delivered south";
-  if (n === "fininshed south") return "finished south";
+  // Tolerate historical values (South) and normalize them into North.
+  const regionNormalized = n.replace(/\s+south$/i, " north");
 
-  return n;
+  // Tolerate spelling/casing variations and current Airtable values.
+  if (regionNormalized === "outsourse north") return "outsource north";
+  if (regionNormalized === "delivered to north") return "delivered north";
+  if (regionNormalized === "delivered north") return "delivered north";
+  if (regionNormalized === "fininshed north") return "finished north";
+
+  return regionNormalized;
 }
 
 function groupWeightFor(key) {
@@ -161,7 +165,7 @@ function render(rows) {
       <td><span class="pill job-emph">${escapeHtml(r.jobId)}</span></td>
       <td>${escapeHtml(r.clientNameText ?? "")}</td>
       <td>${escapeHtml(r.jobName ?? "")}</td>
-      <td>${escapeHtml(r.outsourceSouth ?? "")}</td>
+      <td>${escapeHtml(r.outsourceNorth ?? "")}</td>
       <td style="max-width:240px;">${mockupsCell(r.mockup)}</td>
       <td>${escapeHtml(r.method ?? "")}</td>
       <td>
@@ -191,11 +195,11 @@ function render(rows) {
     </tr>
   `;
 
-  // Group by Outsource South
+  // Group by Outsource North
   let lastGroup = null;
   const html = rows
     .map((r) => {
-      const groupLabel = String(r.outsourceSouth ?? "").trim() || "—";
+      const groupLabel = String(r.outsourceNorth ?? "").trim() || "—";
       const key = statusKey(groupLabel);
       const slug = slugifyGroup(key);
       const groupClass = `group-${slug}`;
@@ -229,14 +233,14 @@ async function load() {
     }
     const data = await r.json();
     allRows = data.sort((a, b) => {
-      const ka = statusKey(a.outsourceSouth);
-      const kb = statusKey(b.outsourceSouth);
+      const ka = statusKey(a.outsourceNorth);
+      const kb = statusKey(b.outsourceNorth);
       const wa = groupWeightFor(ka);
       const wb = groupWeightFor(kb);
       if (wa !== wb) return wa - wb;
 
-      const ga = normStatus(a.outsourceSouth);
-      const gb = normStatus(b.outsourceSouth);
+      const ga = normStatus(a.outsourceNorth);
+      const gb = normStatus(b.outsourceNorth);
       if (ga !== gb) return ga.localeCompare(gb);
 
       const na = Number(a.jobId);
@@ -311,7 +315,7 @@ function openCartonsModal(rowEl) {
       </label>
       <button id="cartonsSave" type="button">Save</button>
     </div>
-    <div class="muted" style="margin-top:10px;">Saves cartons and sets Outsource South to Delivered to South.</div>
+    <div class="muted" style="margin-top:10px;">Saves cartons and sets Outsource North to Delivered to North.</div>
   `;
 
   viewerBackdrop.style.display = "flex";
@@ -390,7 +394,7 @@ tbody.addEventListener("click", (e) => {
     fetch("/api/status", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ id, status: "Arrived to PM" })
+      body: JSON.stringify({ id, status: "Arrived to PM North" })
     })
       .then(async (r) => {
         if (!r.ok) throw new Error(await r.text());

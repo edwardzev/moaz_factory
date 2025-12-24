@@ -29,7 +29,7 @@ export default async function handler(req, res) {
     body: JSON.stringify({
       fields: {
         "Carton IN": cartonsNum,
-        "Outsource South": "Delivered to South",
+        "Outsource North": "Delivered to North",
       },
     }),
   });
