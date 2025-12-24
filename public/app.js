@@ -107,7 +107,7 @@ document.addEventListener("keydown", (e) => {
 
 function render(rows) {
   if (!rows.length) {
-    tbody.innerHTML = `<tr><td colspan="13" class="muted">No records</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="12" class="muted">No records</td></tr>`;
     return;
   }
 
@@ -156,8 +156,8 @@ function render(rows) {
       .join("");
   };
 
-  const rowHtml = (r) => `
-    <tr data-id="${r.id}">
+  const rowHtml = (r, rowClass) => `
+    <tr data-id="${r.id}" class="${escapeHtml(rowClass || "")}">
       <td><span class="pill job-emph">${escapeHtml(r.jobId)}</span></td>
       <td>${escapeHtml(r.clientNameText ?? "")}</td>
       <td>${escapeHtml(r.jobName ?? "")}</td>
@@ -188,9 +188,6 @@ function render(rows) {
       <td>
         <button class="ready-sent" type="button">Ready Sent</button>
       </td>
-      <td class="log" style="max-width:520px;">
-        ${fmtLogPreview(r.impr_log)}
-      </td>
     </tr>
   `;
 
@@ -200,12 +197,14 @@ function render(rows) {
     .map((r) => {
       const groupLabel = String(r.outsourceSouth ?? "").trim() || "—";
       const key = statusKey(groupLabel);
-      const groupClass = `group-${slugifyGroup(key)}`;
+      const slug = slugifyGroup(key);
+      const groupClass = `group-${slug}`;
+      const rowClass = `row-${slug}`;
       const header = groupLabel !== lastGroup
-        ? `<tr class="group-row ${groupClass}" data-group="${escapeHtml(key)}"><td colspan="13">${escapeHtml(groupLabel)}</td></tr>`
+        ? `<tr class="group-row ${groupClass}" data-group="${escapeHtml(key)}"><td colspan="12">${escapeHtml(groupLabel)}</td></tr>`
         : "";
       lastGroup = groupLabel;
-      return header + rowHtml(r);
+      return header + rowHtml(r, rowClass);
     })
     .join("");
 
@@ -250,7 +249,7 @@ async function load() {
   } catch (e) {
     setStatus("Error");
     setError(e?.message || String(e));
-    tbody.innerHTML = `<tr><td colspan="13" class="muted">Failed to load</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="12" class="muted">Failed to load</td></tr>`;
   }
 }
 
@@ -284,11 +283,6 @@ async function saveDone(rowEl) {
       const t = await r.text();
       throw new Error(`POST /api/log failed (${r.status})\n${t}`);
     }
-
-    // Optimistic UI update (append log preview)
-    const logCell = rowEl.querySelector(".log");
-    const stamp = `${nowStamp()} - ${qty}`;
-    logCell.innerHTML = (logCell.innerHTML.includes("—") ? "" : logCell.innerHTML + "<br/>") + escapeHtml(stamp);
 
     qtyEl.value = "";
     setStatus("Saved");
