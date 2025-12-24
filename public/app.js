@@ -14,7 +14,7 @@ let allRows = [];
 // Fields shown in the Job-ID popup (order matters; names must match Airtable exactly)
 const ORDER_FIELD_ORDER = [
   "Impressions",
-  "Client name Field",
+  "Client name text",
   "Job Name",
   "Method",
   "Mock up",
@@ -46,6 +46,12 @@ const GROUP_ORDER = [
   "arrived to pm north",
 ];
 const GROUP_WEIGHT = new Map(GROUP_ORDER.map((k, i) => [k, i]));
+
+function displayMethod(method) {
+  const m = String(method ?? "").trim().toLowerCase();
+  if (m === "press" || m === "cutting to pieces") return "";
+  return String(method ?? "");
+}
 
 function normStatus(s) {
   return String(s ?? "")
@@ -143,13 +149,26 @@ function attachmentsList(items, { jobId, jobName }) {
       const mime = a?.type || "";
       if (!url) return "";
 
+      const thumb =
+        a?.thumbnails?.small?.url ||
+        a?.thumbnails?.large?.url ||
+        a?.thumbnails?.full?.url ||
+        null;
+
+      const preview = thumb
+        ? `<img src="${escapeHtml(thumb)}" alt="${escapeHtml(filename)}" style="width:56px;height:auto;border:1px solid #ddd;vertical-align:middle;"/>`
+        : `<span class="pill">${escapeHtml(filename)}</span>`;
+
       return `
-        <div style="margin-bottom:8px;">
-          <span class="pill">${escapeHtml(filename)}</span>
-          <span class="muted"> · </span>
-          <a href="#" class="order-attach-view muted" data-url="${escapeHtml(url)}" data-filename="${escapeHtml(filename)}" data-mime="${escapeHtml(mime)}" data-jobid="${escapeHtml(jobId ?? "")}" data-jobname="${escapeHtml(jobName ?? "")}" style="text-decoration:underline;">view</a>
-          <span class="muted"> · </span>
-          <a href="#" class="order-attach-download muted" data-url="${escapeHtml(url)}" data-filename="${escapeHtml(filename)}" style="text-decoration:underline;">download</a>
+        <div style="display:inline-block;margin-right:10px;margin-bottom:10px;vertical-align:top;">
+          <a href="#" class="order-attach-view" data-url="${escapeHtml(url)}" data-filename="${escapeHtml(filename)}" data-mime="${escapeHtml(mime)}" data-jobid="${escapeHtml(jobId ?? "")}" data-jobname="${escapeHtml(jobName ?? "")}" title="View ${escapeHtml(filename)}" style="text-decoration:none;">
+            ${preview}
+          </a>
+          <div style="margin-top:4px;">
+            <a href="#" class="order-attach-view muted" data-url="${escapeHtml(url)}" data-filename="${escapeHtml(filename)}" data-mime="${escapeHtml(mime)}" data-jobid="${escapeHtml(jobId ?? "")}" data-jobname="${escapeHtml(jobName ?? "")}" style="text-decoration:underline;">view</a>
+            <span class="muted"> · </span>
+            <a href="#" class="order-attach-download muted" data-url="${escapeHtml(url)}" data-filename="${escapeHtml(filename)}" style="text-decoration:underline;">download</a>
+          </div>
         </div>
       `;
     })
@@ -167,7 +186,10 @@ function openOrderModal(row) {
     const v = order[fieldName];
     let rendered;
 
-    if (isAirtableAttachmentArray(v)) {
+    if (fieldName === "Method") {
+      const m = displayMethod(v);
+      rendered = m.trim() ? escapeHtml(m) : `<span class="muted">—</span>`;
+    } else if (isAirtableAttachmentArray(v)) {
       rendered = attachmentsList(v, { jobId, jobName });
     } else if (Array.isArray(v)) {
       rendered = v.length ? escapeHtml(v.join(", ")) : `<span class="muted">—</span>`;
@@ -184,7 +206,7 @@ function openOrderModal(row) {
   }).join("");
 
   viewerBody.innerHTML = `
-    <div style="overflow:auto;max-height:65vh;">
+    <div style="overflow:auto;max-height:65vh;font-size:0.7em;">
       <table style="width:100%;border-collapse:separate;border-spacing:0;">
         <tbody>${lines}</tbody>
       </table>
@@ -214,12 +236,6 @@ function render(rows) {
     tbody.innerHTML = `<tr><td colspan="10" class="muted">No records</td></tr>`;
     return;
   }
-
-  const displayMethod = (method) => {
-    const m = String(method ?? "").trim().toLowerCase();
-    if (m === "press" || m === "cutting to pieces") return "";
-    return String(method ?? "");
-  };
 
   const mockupsCell = (mockups) => {
     const items = Array.isArray(mockups) ? mockups : [];

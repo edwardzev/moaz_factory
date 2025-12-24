@@ -5,7 +5,7 @@ const VIEW_ID  = "viwRkYqu8uDdjkNK0";
 // Fields shown in the Job-ID popup (order matters; names must match Airtable exactly)
 const ORDER_FIELD_ORDER = [
   "Impressions",
-  "Client name Field",
+  "Client name text",
   "Job Name",
   "Method",
   "Mock up",
