@@ -111,9 +111,15 @@ document.addEventListener("keydown", (e) => {
 
 function render(rows) {
   if (!rows.length) {
-    tbody.innerHTML = `<tr><td colspan="12" class="muted">No records</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="10" class="muted">No records</td></tr>`;
     return;
   }
+
+  const displayMethod = (method) => {
+    const m = String(method ?? "").trim().toLowerCase();
+    if (m === "press" || m === "cutting to pieces") return "";
+    return String(method ?? "");
+  };
 
   const mockupsCell = (mockups) => {
     const items = Array.isArray(mockups) ? mockups : [];
@@ -167,7 +173,7 @@ function render(rows) {
       <td>${escapeHtml(r.jobName ?? "")}</td>
       <td>${escapeHtml(r.outsourceNorth ?? "")}</td>
       <td style="max-width:240px;">${mockupsCell(r.mockup)}</td>
-      <td>${escapeHtml(r.method ?? "")}</td>
+      <td>${escapeHtml(displayMethod(r.method))}</td>
       <td>
         <div>
           <div><strong>${escapeHtml(r.cartonIn ?? "")}</strong></div>
@@ -175,19 +181,8 @@ function render(rows) {
         </div>
       </td>
       <td class="right">${escapeHtml(r.impressions)}</td>
-      <td class="right"><strong>${escapeHtml(r.impr_left ?? "")}</strong></td>
       <td>
-        <select class="machine">
-          <option value="">—</option>
-          <option value="6" ${String(r.rikmaMachine ?? "") === "6" ? "selected" : ""}>6</option>
-          <option value="8" ${String(r.rikmaMachine ?? "") === "8" ? "selected" : ""}>8</option>
-          <option value="10" ${String(r.rikmaMachine ?? "") === "10" ? "selected" : ""}>10</option>
-        </select>
         <button class="start" type="button">Start</button>
-      </td>
-      <td>
-        <input class="qty" type="number" min="1" placeholder="Qty" style="width:80px"/>
-        <button class="save">Save</button>
       </td>
       <td>
         <button class="ready-sent" type="button">Ready Sent</button>
@@ -205,7 +200,7 @@ function render(rows) {
       const groupClass = `group-${slug}`;
       const rowClass = `row-${slug}`;
       const header = groupLabel !== lastGroup
-        ? `<tr class="group-row ${groupClass}" data-group="${escapeHtml(key)}"><td colspan="12">${escapeHtml(groupLabel)}</td></tr>`
+        ? `<tr class="group-row ${groupClass}" data-group="${escapeHtml(key)}"><td colspan="10">${escapeHtml(groupLabel)}</td></tr>`
         : "";
       lastGroup = groupLabel;
       return header + rowHtml(r, rowClass);
@@ -253,124 +248,46 @@ async function load() {
   } catch (e) {
     setStatus("Error");
     setError(e?.message || String(e));
-    tbody.innerHTML = `<tr><td colspan="12" class="muted">Failed to load</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="10" class="muted">Failed to load</td></tr>`;
   }
-}
-
-function nowStamp() {
-  const d = new Date();
-  const pad = n => String(n).padStart(2, "0");
-  return `${pad(d.getDate())}-${pad(d.getMonth()+1)}-${d.getFullYear()} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
-}
-
-async function saveDone(rowEl) {
-  const id = rowEl.dataset.id;
-  const qtyEl = rowEl.querySelector(".qty");
-  const btn = rowEl.querySelector(".save");
-
-  const qtyRaw = qtyEl.value;
-  const qty = Number(qtyRaw);
-  if (qtyRaw === "" || isNaN(qty) || qty <= 0) return alert("Enter a valid Done Qty");
-
-  btn.disabled = true;
-  btn.textContent = "Saving…";
-  setError("");
-
-  try {
-    const r = await fetch("/api/log", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ id, qty })
-    });
-
-    if (!r.ok) {
-      const t = await r.text();
-      throw new Error(`POST /api/log failed (${r.status})\n${t}`);
-    }
-
-    qtyEl.value = "";
-    setStatus("Saved");
-    await load();
-  } catch (e) {
-    setError(e?.message || String(e));
-    alert("Save failed. See error above.");
-  } finally {
-    btn.disabled = false;
-    btn.textContent = "Save";
-  }
-}
-
-function openCartonsModal(rowEl) {
-  const id = rowEl.dataset.id;
-  const jobId = rowEl.querySelector(".pill")?.textContent?.trim() || "";
-  const jobName = rowEl.children?.[2]?.textContent?.trim() || "";
-  const currentCartons = rowEl.querySelector("td:nth-child(7) strong")?.textContent?.trim() || "";
-
-  viewerTitle.textContent = `${jobId}${jobName ? ` — ${jobName}` : ""}`.trim() || "Product in";
-  viewerBody.innerHTML = `
-    <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;">
-      <label>
-        Carton IN
-        <input id="cartonsInput" type="number" min="0" step="1" value="${escapeHtml(currentCartons)}" style="width:180px;" />
-      </label>
-      <button id="cartonsSave" type="button">Save</button>
-    </div>
-    <div class="muted" style="margin-top:10px;">Saves cartons and sets Outsource North to Delivered to North.</div>
-  `;
-
-  viewerBackdrop.style.display = "flex";
-  viewerBackdrop.setAttribute("aria-hidden", "false");
-
-  const saveBtn = document.getElementById("cartonsSave");
-  saveBtn.addEventListener("click", async () => {
-    const input = document.getElementById("cartonsInput");
-    const cartonsRaw = input.value;
-    const cartons = Number(cartonsRaw);
-    if (cartonsRaw === "" || isNaN(cartons) || cartons < 0) return alert("Enter valid Cartons IN -");
-
-    saveBtn.disabled = true;
-    setError("");
-    try {
-      const r = await fetch("/api/cartons", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id, cartonIn: cartons })
-      });
-      if (!r.ok) {
-        const t = await r.text();
-        throw new Error(`POST /api/cartons failed (${r.status})\n${t}`);
-      }
-      closeViewer();
-      await load();
-    } catch (e) {
-      setError(e?.message || String(e));
-      alert("Save failed. See error above.");
-    } finally {
-      saveBtn.disabled = false;
-    }
-  }, { once: true });
 }
 
 // Events
 tbody.addEventListener("click", (e) => {
   if (e.target.classList.contains("product-in")) {
     const tr = e.target.closest("tr");
-    openCartonsModal(tr);
+    const id = tr.dataset.id;
+
+    e.target.disabled = true;
+    setError("");
+    fetch("/api/status", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id, status: "Delivered to North" })
+    })
+      .then(async (r) => {
+        if (!r.ok) throw new Error(await r.text());
+        await load();
+      })
+      .catch((err) => {
+        setError(err?.message || String(err));
+        alert("Product in failed. See error above.");
+      })
+      .finally(() => {
+        e.target.disabled = false;
+      });
     return;
   }
 
   if (e.target.classList.contains("start")) {
     const tr = e.target.closest("tr");
     const id = tr.dataset.id;
-    const machine = Number(tr.querySelector(".machine")?.value);
-    if (![6, 8, 10].includes(machine)) return alert("Select machine (6 / 8 / 10)");
-
     e.target.disabled = true;
     setError("");
-    fetch("/api/start", {
+    fetch("/api/status", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ id, machine })
+      body: JSON.stringify({ id, status: "In work North" })
     })
       .then(async (r) => {
         if (!r.ok) throw new Error(await r.text());
@@ -443,10 +360,7 @@ tbody.addEventListener("click", (e) => {
     return;
   }
 
-  if (e.target.classList.contains("save")) {
-    const tr = e.target.closest("tr");
-    saveDone(tr);
-  }
+  
 });
 searchEl.addEventListener("input", applyFilter);
 refreshBtn.addEventListener("click", load);

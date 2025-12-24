@@ -16,7 +16,6 @@
 - Browser `GET /api/jobs` → `api/jobs.js` fetches Airtable view and maps fields into rows for the UI.
 - Browser actions call:
   - `POST /api/start` → sets `Rikma Machine` and `Outsource North` to `In work North`.
-  - `POST /api/log` → decrements `Impr_left`, appends a timestamped line to `Impr_log`, and sets `Outsource North` to `Finished North` when `Impr_left` hits `0`.
   - `POST /api/cartons` → sets `Carton IN` and `Outsource North` to `Delivered to North`.
   - `POST /api/status` → sets `Outsource North` to an arbitrary status string (UI uses `Arrived to PM North`).
 - Attachments are downloaded via `GET /api/download?url=...&filename=...` (host allowlist; avoids open proxy).
@@ -25,7 +24,6 @@
 
 - Credentials: `process.env.AIRTABLE_TOKEN` (token only). Base/table/view IDs are hard-coded in API files.
 - Field names used across routes include: `JOB ID`, `Client name text`, `Job Name`, `Outsource North`, `Mock up`, `Method`, `Carton IN`, `Impressions`, `Impr_left`, `Rikma Machine`, `Impr_log`.
-- `Impr_left` semantics: if blank/empty in Airtable, the code treats it as “no progress yet” and defaults it to `Impressions` (see `api/jobs.js` + `api/log.js`).
 - Machine field: APIs try numeric first, then retry with string on Airtable `422` (supports number vs single-select).
 
 # Frontend conventions
@@ -42,4 +40,3 @@
 # Gotchas
 
 - Mutations are real Airtable PATCHes; avoid “testing” against production data.
-- `api/log.js` timestamps use `Asia/Jerusalem`.
