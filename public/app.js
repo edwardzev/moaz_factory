@@ -35,12 +35,14 @@ const ORDER_FIELD_ORDER = [
   "Manager Field",
   "Carton IN",
   "# of packages",
+  "Meters",
 ];
 
 const GROUP_ORDER = [
   "outsource north",
   "prepared to send north",
   "delivered north",
+  "in printer north",
   "in work north",
   "finished north",
   "arrived to pm north",
@@ -186,7 +188,15 @@ function openOrderModal(row) {
     const v = order[fieldName];
     let rendered;
 
-    if (fieldName === "Method") {
+    if (fieldName === "Meters") {
+      // Editable number input with submit button
+      const current = v != null ? escapeHtml(String(v)) : "";
+      rendered = `
+        <div style="display:flex;align-items:center;gap:8px;">
+          <input type="number" class="meters-input" data-record-id="${escapeHtml(row.id)}" value="${current}" step="any" style="width:120px;padding:8px 10px;font-size:1em;border:1px solid var(--border);border-radius:var(--radiusSm);background:var(--surface);color:var(--text);" />
+          <button type="button" class="meters-submit" data-record-id="${escapeHtml(row.id)}" style="padding:8px 14px;font-size:0.9em;">Save</button>
+        </div>`;
+    } else if (fieldName === "Method") {
       const m = displayMethod(v);
       rendered = m.trim() ? escapeHtml(m) : `<span class="muted">—</span>`;
     } else if (isAirtableAttachmentArray(v)) {
@@ -226,6 +236,76 @@ function closeViewer() {
 viewerClose.addEventListener("click", closeViewer);
 viewerBackdrop.addEventListener("click", (e) => {
   if (e.target === viewerBackdrop) closeViewer();
+
+  // Handle attachment view inside order popup
+  if (e.target.closest(".order-attach-view")) {
+    e.preventDefault();
+    const el = e.target.closest(".order-attach-view");
+    openViewer({
+      jobId: el.dataset.jobid,
+      jobName: el.dataset.jobname,
+      url: el.dataset.url,
+      filename: el.dataset.filename,
+      mime: el.dataset.mime,
+    });
+    return;
+  }
+
+  // Handle attachment download inside order popup
+  if (e.target.closest(".order-attach-download")) {
+    e.preventDefault();
+    const el = e.target.closest(".order-attach-download");
+    const url = el.dataset.url;
+    const filename = el.dataset.filename || "download";
+    if (!url) return;
+    const a = document.createElement("a");
+    a.href = `/api/download?url=${encodeURIComponent(url)}&filename=${encodeURIComponent(filename)}`;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    return;
+  }
+
+  // Handle Meters save button inside order popup
+  if (e.target.closest(".meters-submit")) {
+    const btn = e.target.closest(".meters-submit");
+    const recordId = btn.dataset.recordId;
+    const input = viewerBody.querySelector(`.meters-input[data-record-id="${recordId}"]`);
+    if (!input) return;
+
+    const val = input.value.trim();
+    if (val === "" || isNaN(Number(val))) {
+      alert("Please enter a valid number for Meters.");
+      return;
+    }
+
+    btn.disabled = true;
+    btn.textContent = "Saving…";
+    setError("");
+
+    fetch("/api/meters", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id: recordId, meters: Number(val) }),
+    })
+      .then(async (r) => {
+        if (!r.ok) throw new Error(await r.text());
+        btn.textContent = "Saved ✓";
+        setTimeout(() => { btn.textContent = "Save"; }, 1500);
+        // Refresh data in background
+        await load();
+      })
+      .catch((err) => {
+        setError(err?.message || String(err));
+        alert("Failed to save Meters. See error above.");
+        btn.textContent = "Save";
+      })
+      .finally(() => {
+        btn.disabled = false;
+      });
+    return;
+  }
 });
 document.addEventListener("keydown", (e) => {
   if (e.key === "Escape" && viewerBackdrop.style.display === "flex") closeViewer();
@@ -233,7 +313,7 @@ document.addEventListener("keydown", (e) => {
 
 function render(rows) {
   if (!rows.length) {
-    tbody.innerHTML = `<tr><td colspan="10" class="muted">No records</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="11" class="muted">No records</td></tr>`;
     return;
   }
 
@@ -297,6 +377,7 @@ function render(rows) {
         </div>
       </td>
       <td class="right">${escapeHtml(r.impressions)}</td>
+      <td class="right">${r.meters != null ? escapeHtml(r.meters) : '<span class="muted">—</span>'}</td>
       <td>
         <button class="start" type="button">Start</button>
       </td>
@@ -316,7 +397,7 @@ function render(rows) {
       const groupClass = `group-${slug}`;
       const rowClass = `row-${slug}`;
       const header = groupLabel !== lastGroup
-        ? `<tr class="group-row ${groupClass}" data-group="${escapeHtml(key)}"><td colspan="10">${escapeHtml(groupLabel)}</td></tr>`
+        ? `<tr class="group-row ${groupClass}" data-group="${escapeHtml(key)}"><td colspan="11">${escapeHtml(groupLabel)}</td></tr>`
         : "";
       lastGroup = groupLabel;
       return header + rowHtml(r, rowClass);
@@ -364,7 +445,7 @@ async function load() {
   } catch (e) {
     setStatus("Error");
     setError(e?.message || String(e));
-    tbody.innerHTML = `<tr><td colspan="10" class="muted">Failed to load</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="11" class="muted">Failed to load</td></tr>`;
   }
 }
 
@@ -376,34 +457,6 @@ tbody.addEventListener("click", (e) => {
     const id = tr?.dataset?.id;
     const row = allRows.find(r => r.id === id);
     if (row) openOrderModal(row);
-    return;
-  }
-
-  if (e.target.closest(".order-attach-view")) {
-    e.preventDefault();
-    const el = e.target.closest(".order-attach-view");
-    openViewer({
-      jobId: el.dataset.jobid,
-      jobName: el.dataset.jobname,
-      url: el.dataset.url,
-      filename: el.dataset.filename,
-      mime: el.dataset.mime,
-    });
-    return;
-  }
-
-  if (e.target.closest(".order-attach-download")) {
-    e.preventDefault();
-    const el = e.target.closest(".order-attach-download");
-    const url = el.dataset.url;
-    const filename = el.dataset.filename || "download";
-    if (!url) return;
-    const a = document.createElement("a");
-    a.href = `/api/download?url=${encodeURIComponent(url)}&filename=${encodeURIComponent(filename)}`;
-    a.download = filename;
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
     return;
   }
 

@@ -26,6 +26,7 @@ const ORDER_FIELD_ORDER = [
   "Manager Field",
   "Carton IN",
   "# of packages",
+  "Meters",
 ];
 
 export default async function handler(req, res) {
@@ -66,6 +67,7 @@ export default async function handler(req, res) {
       ),
       rikmaMachine: rec.fields["Rikma Machine"] ?? null,
       impr_log: rec.fields["Impr_log"] ?? "",
+      meters: rec.fields["Meters"] ?? null,
 
       // Exact Airtable-field popup payload
       order: ORDER_FIELD_ORDER.reduce((acc, fieldName) => {
