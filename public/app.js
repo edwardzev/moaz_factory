@@ -74,6 +74,7 @@ function statusKey(s) {
   if (regionNormalized === "delivered to north") return "delivered north";
   if (regionNormalized === "delivered north") return "delivered north";
   if (regionNormalized === "fininshed north") return "finished north";
+  if (regionNormalized === "arrived to pm") return "arrived to pm north";
 
   return regionNormalized;
 }
@@ -313,7 +314,7 @@ document.addEventListener("keydown", (e) => {
 
 function render(rows) {
   if (!rows.length) {
-    tbody.innerHTML = `<tr><td colspan="11" class="muted">No records</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="12" class="muted">No records</td></tr>`;
     return;
   }
 
@@ -382,7 +383,10 @@ function render(rows) {
         <button class="start" type="button">Start</button>
       </td>
       <td>
-        <button class="ready-sent" type="button">Ready Sent</button>
+        <button class="ready-sent" type="button" data-action="ready">Ready</button>
+      </td>
+      <td>
+        <button class="ready-sent" type="button" data-action="sent">Sent</button>
       </td>
     </tr>
   `;
@@ -397,7 +401,7 @@ function render(rows) {
       const groupClass = `group-${slug}`;
       const rowClass = `row-${slug}`;
       const header = groupLabel !== lastGroup
-        ? `<tr class="group-row ${groupClass}" data-group="${escapeHtml(key)}"><td colspan="11">${escapeHtml(groupLabel)}</td></tr>`
+        ? `<tr class="group-row ${groupClass}" data-group="${escapeHtml(key)}"><td colspan="12">${escapeHtml(groupLabel)}</td></tr>`
         : "";
       lastGroup = groupLabel;
       return header + rowHtml(r, rowClass);
@@ -445,7 +449,7 @@ async function load() {
   } catch (e) {
     setStatus("Error");
     setError(e?.message || String(e));
-    tbody.innerHTML = `<tr><td colspan="11" class="muted">Failed to load</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="12" class="muted">Failed to load</td></tr>`;
   }
 }
 
@@ -512,12 +516,22 @@ tbody.addEventListener("click", (e) => {
   if (e.target.classList.contains("ready-sent")) {
     const tr = e.target.closest("tr");
     const id = tr.dataset.id;
+
+    const action = String(e.target.dataset.action || "").trim().toLowerCase();
+    const status = action === "ready"
+      ? "Finished North"
+      : action === "sent"
+        ? "Arrived to PM"
+        : "";
+
+    if (!status) return;
+
     e.target.disabled = true;
     setError("");
     fetch("/api/status", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ id, status: "Arrived to PM North" })
+      body: JSON.stringify({ id, status })
     })
       .then(async (r) => {
         if (!r.ok) throw new Error(await r.text());
@@ -525,7 +539,7 @@ tbody.addEventListener("click", (e) => {
       })
       .catch((err) => {
         setError(err?.message || String(err));
-        alert("Ready Sent failed. See error above.");
+        alert("Status update failed. See error above.");
       })
       .finally(() => {
         e.target.disabled = false;
