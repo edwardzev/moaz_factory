@@ -35,6 +35,7 @@ const ORDER_FIELD_ORDER = [
   "Manager Field",
   "Carton IN",
   "# of packages",
+  "Printed North",
   "Meters",
 ];
 
@@ -197,6 +198,22 @@ function openOrderModal(row) {
           <input type="number" class="meters-input" data-record-id="${escapeHtml(row.id)}" value="${current}" step="any" style="width:120px;padding:8px 10px;font-size:1em;border:1px solid var(--border);border-radius:var(--radiusSm);background:var(--surface);color:var(--text);" />
           <button type="button" class="meters-submit" data-record-id="${escapeHtml(row.id)}" style="padding:8px 14px;font-size:0.9em;">Save</button>
         </div>`;
+    } else if (fieldName === "Printed North") {
+      // Editable single-select with submit button
+      const current = v != null ? escapeHtml(String(v)) : "";
+      const options = ["Printed North DTF", "Printed North Sublim...", "Printed North UVDTF"];
+      const optionsHtml = options.map(opt => {
+        const selected = current === opt ? "selected" : "";
+        return `<option value="${escapeHtml(opt)}" ${selected}>${escapeHtml(opt)}</option>`;
+      }).join("");
+      rendered = `
+        <div style="display:flex;align-items:center;gap:8px;">
+          <select class="printed-north-select" data-record-id="${escapeHtml(row.id)}" style="width:180px;padding:8px 10px;font-size:1em;border:1px solid var(--border);border-radius:var(--radiusSm);background:var(--surface);color:var(--text);">
+            <option value="">-- Select --</option>
+            ${optionsHtml}
+          </select>
+          <button type="button" class="printed-north-submit" data-record-id="${escapeHtml(row.id)}" style="padding:8px 14px;font-size:0.9em;">Save</button>
+        </div>`;
     } else if (fieldName === "Method") {
       const m = displayMethod(v);
       rendered = m.trim() ? escapeHtml(m) : `<span class="muted">—</span>`;
@@ -300,6 +317,46 @@ viewerBackdrop.addEventListener("click", (e) => {
       .catch((err) => {
         setError(err?.message || String(err));
         alert("Failed to save Meters. See error above.");
+        btn.textContent = "Save";
+      })
+      .finally(() => {
+        btn.disabled = false;
+      });select = viewerBody.querySelector(`.printed-north-select[data-record-id="${recordId}"]`);
+    if (!select) return;
+
+    const val = select.value.trim();
+    if (val === "") {
+      alert("Please selectprinted-north-submit")) {
+    const btn = e.target.closest(".printed-north-submit");
+    const recordId = btn.dataset.recordId;
+    const input = viewerBody.querySelector(`.printed-north-input[data-record-id="${recordId}"]`);
+    if (!input) return;
+
+    const val = input.value.trim();
+    if (val === "") {
+      alert("Please enter a value for Printed North.");
+      return;
+    }
+
+    btn.disabled = true;
+    btn.textContent = "Saving…";
+    setError("");
+
+    fetch("/api/printed-north", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id: recordId, printedNorth: val }),
+    })
+      .then(async (r) => {
+        if (!r.ok) throw new Error(await r.text());
+        btn.textContent = "Saved ✓";
+        setTimeout(() => { btn.textContent = "Save"; }, 1500);
+        // Refresh data in background
+        await load();
+      })
+      .catch((err) => {
+        setError(err?.message || String(err));
+        alert("Failed to save Printed North. See error above.");
         btn.textContent = "Save";
       })
       .finally(() => {
