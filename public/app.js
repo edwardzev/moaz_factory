@@ -321,20 +321,19 @@ viewerBackdrop.addEventListener("click", (e) => {
       })
       .finally(() => {
         btn.disabled = false;
-      });select = viewerBody.querySelector(`.printed-north-select[data-record-id="${recordId}"]`);
+      });
+    return;
+  }
+
+  if (e.target.closest(".printed-north-submit")) {
+    const btn = e.target.closest(".printed-north-submit");
+    const recordId = btn.dataset.recordId;
+    const select = viewerBody.querySelector(`.printed-north-select[data-record-id="${recordId}"]`);
     if (!select) return;
 
     const val = select.value.trim();
     if (val === "") {
-      alert("Please selectprinted-north-submit")) {
-    const btn = e.target.closest(".printed-north-submit");
-    const recordId = btn.dataset.recordId;
-    const input = viewerBody.querySelector(`.printed-north-input[data-record-id="${recordId}"]`);
-    if (!input) return;
-
-    const val = input.value.trim();
-    if (val === "") {
-      alert("Please enter a value for Printed North.");
+      alert("Please select a value for Printed North.");
       return;
     }
 
