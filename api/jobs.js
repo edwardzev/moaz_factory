@@ -26,6 +26,7 @@ const ORDER_FIELD_ORDER = [
   "Manager Field",
   "Carton IN",
   "# of packages",
+  "Printed North",
   "Meters",
 ];
 
