@@ -357,6 +357,11 @@
       min-width: 0;
     }
 
+    .kanban-column.drag-over {
+      outline: 3px solid rgba(59, 130, 246, 0.35);
+      outline-offset: 2px;
+    }
+
     .kanban-column-header {
       display: flex;
       justify-content: space-between;
@@ -380,6 +385,15 @@
       background: #fff;
       padding: 10px;
       min-width: 0;
+    }
+
+    .kanban-card[draggable="true"] {
+      cursor: grab;
+    }
+
+    .kanban-card.dragging {
+      opacity: 0.55;
+      cursor: grabbing;
     }
 
     .kanban-card-head,

@@ -65,12 +65,20 @@ const GROUP_ORDER = [
   "arrived to pm north",
 ];
 const GROUP_WEIGHT = new Map(GROUP_ORDER.map((k, i) => [k, i]));
-const PRIORITY_COLUMN_ORDER = [
-  "Uncategorized",
-  "F Orders",
-  "PRT ready",
-  "unclear",
+const PRIORITY_COLUMNS = [
+  { value: "", label: "Incoming" },
+  { value: "PRT ready", label: "PRT ready" },
+  { value: "Unclear", label: "Unclear" },
+  { value: "Big mama", label: "Big DTF" },
+  { value: "Sublimation", label: "Sublimation" },
+  { value: "UV DTF", label: "UV DTF" },
+  { value: "Printed material north", label: "Printed material north" },
+  { value: "Press Started", label: "Press Started" },
+  { value: "Press Finished", label: "Press Finished" },
 ];
+const PRIORITY_VALUES = new Set(PRIORITY_COLUMNS.map((column) => column.value));
+
+let draggedKanbanId = null;
 
 function displayMethod(method) {
   const m = String(method ?? "").trim().toLowerCase();
@@ -491,29 +499,18 @@ function renderTable(rows) {
 
 function renderKanban(rows) {
   const groups = new Map();
-  for (const label of PRIORITY_COLUMN_ORDER) {
-    groups.set(label, []);
+  for (const column of PRIORITY_COLUMNS) {
+    groups.set(column.value, []);
   }
 
   for (const row of rows) {
-    const label = String(row.printerNumber ?? "").trim() || "Uncategorized";
-    if (!groups.has(label)) groups.set(label, []);
-    groups.get(label).push(row);
+    const value = String(row.printerNumber ?? "").trim();
+    if (!PRIORITY_VALUES.has(value)) continue;
+    groups.get(value).push(row);
   }
 
-  const sortedGroups = [...groups.entries()].sort(([labelA], [labelB]) => {
-    const indexA = PRIORITY_COLUMN_ORDER.indexOf(labelA);
-    const indexB = PRIORITY_COLUMN_ORDER.indexOf(labelB);
-    if (indexA !== -1 || indexB !== -1) {
-      if (indexA === -1) return 1;
-      if (indexB === -1) return -1;
-      return indexA - indexB;
-    }
-    return labelA.localeCompare(labelB);
-  });
-
   const cardHtml = (row) => `
-    <article class="kanban-card" data-id="${escapeHtml(row.id)}">
+    <article class="kanban-card" data-id="${escapeHtml(row.id)}" draggable="true">
       <div class="kanban-card-head">
         <a href="#" class="pill job-emph job-open" style="text-decoration:none;">${escapeHtml(row.jobId)}</a>
         ${displayMethod(row.method).trim() ? `<span class="pill">${escapeHtml(displayMethod(row.method))}</span>` : ""}
@@ -539,13 +536,14 @@ function renderKanban(rows) {
     </article>
   `;
 
-  kanbanEl.innerHTML = sortedGroups
-    .map(([label, groupRows]) => {
-      const slug = slugifyGroup(label);
+  kanbanEl.innerHTML = PRIORITY_COLUMNS
+    .map((column) => {
+      const groupRows = groups.get(column.value) || [];
+      const slug = slugifyGroup(column.label);
       return `
-        <section class="kanban-column group-${escapeHtml(slug)}">
+        <section class="kanban-column group-${escapeHtml(slug)}" data-printer-value="${escapeHtml(column.value)}">
           <div class="kanban-column-header">
-            <span>${escapeHtml(label)}</span>
+            <span>${escapeHtml(column.label)}</span>
             <span class="pill">${groupRows.length}</span>
           </div>
           <div class="kanban-column-body">
@@ -644,6 +642,37 @@ function rowForTarget(target) {
   const id = item?.dataset?.id;
   if (!id) return null;
   return allRows.find(r => r.id === id) || null;
+}
+
+async function moveKanbanCard(recordId, printerNumber) {
+  const row = allRows.find(r => r.id === recordId);
+  if (!row) return;
+
+  const currentValue = String(row.printerNumber ?? "").trim();
+  const nextValue = String(printerNumber ?? "").trim();
+  if (currentValue === nextValue) return;
+
+  setError("");
+  setStatus("Saving Priority column…");
+  row.printerNumber = nextValue;
+  applyFilter();
+
+  try {
+    const r = await fetch("/api/printer-number", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id: recordId, printerNumber: nextValue }),
+    });
+
+    if (!r.ok) throw new Error(await r.text());
+    await load();
+  } catch (err) {
+    row.printerNumber = currentValue;
+    applyFilter();
+    setStatus("Error");
+    setError(err?.message || String(err));
+    alert("Priority column update failed. See error above.");
+  }
 }
 
 // Events
@@ -777,6 +806,44 @@ function handleJobsClick(e) {
 }
 tbody.addEventListener("click", handleJobsClick);
 kanbanEl.addEventListener("click", handleJobsClick);
+kanbanEl.addEventListener("dragstart", (e) => {
+  const card = e.target.closest(".kanban-card");
+  if (!card) return;
+
+  draggedKanbanId = card.dataset.id || "";
+  e.dataTransfer.effectAllowed = "move";
+  e.dataTransfer.setData("text/plain", draggedKanbanId);
+  card.classList.add("dragging");
+});
+kanbanEl.addEventListener("dragend", (e) => {
+  const card = e.target.closest(".kanban-card");
+  if (card) card.classList.remove("dragging");
+  draggedKanbanId = null;
+  kanbanEl.querySelectorAll(".drag-over").forEach((el) => el.classList.remove("drag-over"));
+});
+kanbanEl.addEventListener("dragover", (e) => {
+  const column = e.target.closest(".kanban-column");
+  if (!column || !draggedKanbanId) return;
+  e.preventDefault();
+  e.dataTransfer.dropEffect = "move";
+  column.classList.add("drag-over");
+});
+kanbanEl.addEventListener("dragleave", (e) => {
+  const column = e.target.closest(".kanban-column");
+  if (!column || column.contains(e.relatedTarget)) return;
+  column.classList.remove("drag-over");
+});
+kanbanEl.addEventListener("drop", (e) => {
+  const column = e.target.closest(".kanban-column");
+  if (!column) return;
+
+  e.preventDefault();
+  column.classList.remove("drag-over");
+  const recordId = e.dataTransfer.getData("text/plain") || draggedKanbanId;
+  if (!recordId) return;
+
+  moveKanbanCard(recordId, column.dataset.printerValue || "");
+});
 searchEl.addEventListener("input", applyFilter);
 refreshBtn.addEventListener("click", load);
 listViewBtn.addEventListener("click", () => setView("list"));
