@@ -8,7 +8,7 @@ const ALLOWED_PRINTER_NUMBERS = new Set([
   "Big mama",
   "Sublimation",
   "UV DTF",
-  "Printed material north",
+  "Printed Material North",
   "Press Started",
   "Press Finished",
 ]);

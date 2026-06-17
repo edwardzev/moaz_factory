@@ -72,7 +72,7 @@ const PRIORITY_COLUMNS = [
   { value: "Big mama", label: "Big DTF" },
   { value: "Sublimation", label: "Sublimation" },
   { value: "UV DTF", label: "UV DTF" },
-  { value: "Printed material north", label: "Printed material north" },
+  { value: "Printed Material North", label: "Printed material north" },
   { value: "Press Started", label: "Press Started" },
   { value: "Press Finished", label: "Press Finished" },
 ];
