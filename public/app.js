@@ -3,6 +3,10 @@ const statusEl = document.getElementById("status");
 const errEl = document.getElementById("error");
 const searchEl = document.getElementById("search");
 const refreshBtn = document.getElementById("refreshBtn");
+const jobsTable = document.getElementById("jobsTable");
+const kanbanEl = document.getElementById("kanban");
+const listViewBtn = document.getElementById("listViewBtn");
+const kanbanViewBtn = document.getElementById("kanbanViewBtn");
 
 const viewerBackdrop = document.getElementById("viewerBackdrop");
 const viewerTitle = document.getElementById("viewerTitle");
@@ -10,6 +14,18 @@ const viewerBody = document.getElementById("viewerBody");
 const viewerClose = document.getElementById("viewerClose");
 
 let allRows = [];
+let currentView = "list";
+
+const VIEW_MODES = {
+  list: {
+    label: "Full list",
+    endpoint: "/api/jobs",
+  },
+  kanban: {
+    label: "Priority kanban",
+    endpoint: "/api/jobs?view=priority",
+  },
+};
 
 // Fields shown in the Job-ID popup (order matters; names must match Airtable exactly)
 const ORDER_FIELD_ORDER = [
@@ -172,6 +188,51 @@ function attachmentsList(items, { jobId, jobName }) {
             <a href="#" class="order-attach-view muted" data-url="${escapeHtml(url)}" data-filename="${escapeHtml(filename)}" data-mime="${escapeHtml(mime)}" data-jobid="${escapeHtml(jobId ?? "")}" data-jobname="${escapeHtml(jobName ?? "")}" style="text-decoration:underline;">view</a>
             <span class="muted"> · </span>
             <a href="#" class="order-attach-download muted" data-url="${escapeHtml(url)}" data-filename="${escapeHtml(filename)}" style="text-decoration:underline;">download</a>
+          </div>
+        </div>
+      `;
+    })
+    .join("");
+}
+
+function mockupsCell(mockups) {
+  const items = Array.isArray(mockups) ? mockups : [];
+  if (!items.length) return `<span class="muted">—</span>`;
+
+  return items
+    .map((a) => {
+      const url = a?.url;
+      const filename = a?.filename || "file";
+      const mime = a?.type || "";
+      if (!url) return "";
+
+      const thumb =
+        a?.thumbnails?.small?.url ||
+        a?.thumbnails?.large?.url ||
+        a?.thumbnails?.full?.url ||
+        null;
+
+      const img = thumb
+        ? `<img src="${escapeHtml(thumb)}" alt="${escapeHtml(filename)}" style="width:56px;height:auto;border:1px solid #ddd;"/>`
+        : `<span class="pill">${escapeHtml(filename)}</span>`;
+
+      return `
+        <div style="display:inline-block;margin-right:8px;margin-bottom:6px;vertical-align:top;">
+          <button
+            type="button"
+            class="mockup-view"
+            data-url="${escapeHtml(url)}"
+            data-filename="${escapeHtml(filename)}"
+            data-mime="${escapeHtml(mime)}"
+            title="View ${escapeHtml(filename)}"
+            style="border:0;background:transparent;padding:0;cursor:pointer;"
+          >
+            ${img}
+          </button>
+          <div style="margin-top:4px;">
+            <a href="#" class="mockup-view muted" data-url="${escapeHtml(url)}" data-filename="${escapeHtml(filename)}" data-mime="${escapeHtml(mime)}" style="text-decoration:underline;">view</a>
+            <span class="muted"> · </span>
+            <a href="#" class="mockup-download muted" data-url="${escapeHtml(url)}" data-filename="${escapeHtml(filename)}" style="text-decoration:underline;">download</a>
           </div>
         </div>
       `;
@@ -368,56 +429,11 @@ document.addEventListener("keydown", (e) => {
   if (e.key === "Escape" && viewerBackdrop.style.display === "flex") closeViewer();
 });
 
-function render(rows) {
+function renderTable(rows) {
   if (!rows.length) {
     tbody.innerHTML = `<tr><td colspan="12" class="muted">No records</td></tr>`;
     return;
   }
-
-  const mockupsCell = (mockups) => {
-    const items = Array.isArray(mockups) ? mockups : [];
-    if (!items.length) return `<span class="muted">—</span>`;
-
-    return items
-      .map((a) => {
-        const url = a?.url;
-        const filename = a?.filename || "file";
-        const mime = a?.type || "";
-        if (!url) return "";
-
-        const thumb =
-          a?.thumbnails?.small?.url ||
-          a?.thumbnails?.large?.url ||
-          a?.thumbnails?.full?.url ||
-          null;
-
-        const img = thumb
-          ? `<img src="${escapeHtml(thumb)}" alt="${escapeHtml(filename)}" style="width:56px;height:auto;border:1px solid #ddd;"/>`
-          : `<span class="pill">${escapeHtml(filename)}</span>`;
-
-        return `
-          <div style="display:inline-block;margin-right:8px;margin-bottom:6px;vertical-align:top;">
-            <button
-              type="button"
-              class="mockup-view"
-              data-url="${escapeHtml(url)}"
-              data-filename="${escapeHtml(filename)}"
-              data-mime="${escapeHtml(mime)}"
-              title="View ${escapeHtml(filename)}"
-              style="border:0;background:transparent;padding:0;cursor:pointer;"
-            >
-              ${img}
-            </button>
-            <div style="margin-top:4px;">
-              <a href="#" class="mockup-view muted" data-url="${escapeHtml(url)}" data-filename="${escapeHtml(filename)}" data-mime="${escapeHtml(mime)}" style="text-decoration:underline;">view</a>
-              <span class="muted"> · </span>
-              <a href="#" class="mockup-download muted" data-url="${escapeHtml(url)}" data-filename="${escapeHtml(filename)}" style="text-decoration:underline;">download</a>
-            </div>
-          </div>
-        `;
-      })
-      .join("");
-  };
 
   const rowHtml = (r, rowClass) => `
     <tr data-id="${r.id}" class="${escapeHtml(rowClass || "")}">
@@ -467,6 +483,83 @@ function render(rows) {
   tbody.innerHTML = html;
 }
 
+function renderKanban(rows) {
+  if (!rows.length) {
+    kanbanEl.innerHTML = `<div class="muted">No records</div>`;
+    return;
+  }
+
+  const groups = new Map();
+  for (const row of rows) {
+    const label = String(row.outsourceNorth ?? "").trim() || "—";
+    if (!groups.has(label)) groups.set(label, []);
+    groups.get(label).push(row);
+  }
+
+  const sortedGroups = [...groups.entries()].sort(([labelA], [labelB]) => {
+    const keyA = statusKey(labelA);
+    const keyB = statusKey(labelB);
+    const weightA = groupWeightFor(keyA);
+    const weightB = groupWeightFor(keyB);
+    if (weightA !== weightB) return weightA - weightB;
+    return labelA.localeCompare(labelB);
+  });
+
+  const cardHtml = (row) => `
+    <article class="kanban-card" data-id="${escapeHtml(row.id)}">
+      <div class="kanban-card-head">
+        <a href="#" class="pill job-emph job-open" style="text-decoration:none;">${escapeHtml(row.jobId)}</a>
+        ${displayMethod(row.method).trim() ? `<span class="pill">${escapeHtml(displayMethod(row.method))}</span>` : ""}
+      </div>
+      <div class="kanban-title">${escapeHtml(row.jobName ?? "")}</div>
+      <dl class="kanban-meta">
+        <dt>Client</dt>
+        <dd>${escapeHtml(row.clientNameText ?? "")}</dd>
+        <dt>Carton IN</dt>
+        <dd>${escapeHtml(row.cartonIn ?? "")}</dd>
+        <dt>Impressions</dt>
+        <dd>${escapeHtml(row.impressions ?? "")}</dd>
+        <dt>Meters</dt>
+        <dd>${row.meters != null ? escapeHtml(row.meters) : '<span class="muted">—</span>'}</dd>
+      </dl>
+      <div class="kanban-mockups">${mockupsCell(row.mockup)}</div>
+      <div class="kanban-actions">
+        <button class="product-in" type="button">Product in</button>
+        <button class="start" type="button">Start</button>
+        <button class="ready-sent" type="button" data-action="ready">Ready</button>
+        <button class="ready-sent" type="button" data-action="sent">Sent</button>
+      </div>
+    </article>
+  `;
+
+  kanbanEl.innerHTML = sortedGroups
+    .map(([label, groupRows]) => {
+      const key = statusKey(label);
+      const slug = slugifyGroup(key);
+      return `
+        <section class="kanban-column group-${escapeHtml(slug)}">
+          <div class="kanban-column-header">
+            <span>${escapeHtml(label)}</span>
+            <span class="pill">${groupRows.length}</span>
+          </div>
+          <div class="kanban-column-body">
+            ${groupRows.map(cardHtml).join("")}
+          </div>
+        </section>
+      `;
+    })
+    .join("");
+}
+
+function render(rows) {
+  if (currentView === "kanban") {
+    renderKanban(rows);
+    return;
+  }
+
+  renderTable(rows);
+}
+
 function applyFilter() {
   const q = searchEl.value.trim();
   if (!q) return render(allRows);
@@ -474,55 +567,92 @@ function applyFilter() {
   render(filtered);
 }
 
+function sortListRows(rows) {
+  return rows.sort((a, b) => {
+    const ka = statusKey(a.outsourceNorth);
+    const kb = statusKey(b.outsourceNorth);
+    const wa = groupWeightFor(ka);
+    const wb = groupWeightFor(kb);
+    if (wa !== wb) return wa - wb;
+
+    const ga = normStatus(a.outsourceNorth);
+    const gb = normStatus(b.outsourceNorth);
+    if (ga !== gb) return ga.localeCompare(gb);
+
+    const na = Number(a.jobId);
+    const nb = Number(b.jobId);
+    if (!Number.isNaN(na) && !Number.isNaN(nb)) return na - nb;
+    return String(a.jobId ?? "").localeCompare(String(b.jobId ?? ""));
+  });
+}
+
 async function load() {
   setError("");
-  setStatus("Loading…");
+  const viewConfig = VIEW_MODES[currentView] || VIEW_MODES.list;
+  setStatus(`Loading ${viewConfig.label}…`);
   try {
-    const r = await fetch("/api/jobs", { cache: "no-store" });
+    const r = await fetch(viewConfig.endpoint, { cache: "no-store" });
     if (!r.ok) {
       const t = await r.text();
-      throw new Error(`GET /api/jobs failed (${r.status})\n${t}`);
+      throw new Error(`GET ${viewConfig.endpoint} failed (${r.status})\n${t}`);
     }
     const data = await r.json();
-    allRows = data.sort((a, b) => {
-      const ka = statusKey(a.outsourceNorth);
-      const kb = statusKey(b.outsourceNorth);
-      const wa = groupWeightFor(ka);
-      const wb = groupWeightFor(kb);
-      if (wa !== wb) return wa - wb;
-
-      const ga = normStatus(a.outsourceNorth);
-      const gb = normStatus(b.outsourceNorth);
-      if (ga !== gb) return ga.localeCompare(gb);
-
-      const na = Number(a.jobId);
-      const nb = Number(b.jobId);
-      if (!Number.isNaN(na) && !Number.isNaN(nb)) return na - nb;
-      return String(a.jobId ?? "").localeCompare(String(b.jobId ?? ""));
-    });
+    allRows = currentView === "kanban" ? data : sortListRows(data);
     applyFilter();
     setStatus(`Loaded ${allRows.length} records`);
   } catch (e) {
     setStatus("Error");
     setError(e?.message || String(e));
-    tbody.innerHTML = `<tr><td colspan="12" class="muted">Failed to load</td></tr>`;
+    if (currentView === "kanban") {
+      kanbanEl.innerHTML = `<div class="muted">Failed to load</div>`;
+    } else {
+      tbody.innerHTML = `<tr><td colspan="12" class="muted">Failed to load</td></tr>`;
+    }
   }
 }
 
+function setView(nextView) {
+  if (!VIEW_MODES[nextView] || nextView === currentView) return;
+
+  currentView = nextView;
+  allRows = [];
+  setError("");
+  searchEl.value = "";
+
+  const isKanban = currentView === "kanban";
+  jobsTable.hidden = isKanban;
+  kanbanEl.hidden = !isKanban;
+  tbody.innerHTML = `<tr><td colspan="12" class="muted">Loading…</td></tr>`;
+  kanbanEl.innerHTML = "";
+
+  listViewBtn.classList.toggle("active", !isKanban);
+  listViewBtn.setAttribute("aria-selected", String(!isKanban));
+  kanbanViewBtn.classList.toggle("active", isKanban);
+  kanbanViewBtn.setAttribute("aria-selected", String(isKanban));
+
+  load();
+}
+
+function rowForTarget(target) {
+  const item = target.closest("[data-id]");
+  const id = item?.dataset?.id;
+  if (!id) return null;
+  return allRows.find(r => r.id === id) || null;
+}
+
 // Events
-tbody.addEventListener("click", (e) => {
+function handleJobsClick(e) {
   if (e.target.closest(".job-open")) {
     e.preventDefault();
-    const tr = e.target.closest("tr");
-    const id = tr?.dataset?.id;
-    const row = allRows.find(r => r.id === id);
+    const row = rowForTarget(e.target);
     if (row) openOrderModal(row);
     return;
   }
 
   if (e.target.classList.contains("product-in")) {
-    const tr = e.target.closest("tr");
-    const id = tr.dataset.id;
+    const row = rowForTarget(e.target);
+    const id = row?.id;
+    if (!id) return;
 
     e.target.disabled = true;
     setError("");
@@ -546,8 +676,10 @@ tbody.addEventListener("click", (e) => {
   }
 
   if (e.target.classList.contains("start")) {
-    const tr = e.target.closest("tr");
-    const id = tr.dataset.id;
+    const row = rowForTarget(e.target);
+    const id = row?.id;
+    if (!id) return;
+
     e.target.disabled = true;
     setError("");
     fetch("/api/status", {
@@ -570,8 +702,9 @@ tbody.addEventListener("click", (e) => {
   }
 
   if (e.target.classList.contains("ready-sent")) {
-    const tr = e.target.closest("tr");
-    const id = tr.dataset.id;
+    const row = rowForTarget(e.target);
+    const id = row?.id;
+    if (!id) return;
 
     const action = String(e.target.dataset.action || "").trim().toLowerCase();
     const status = action === "ready"
@@ -606,12 +739,10 @@ tbody.addEventListener("click", (e) => {
   if (e.target.closest(".mockup-view")) {
     e.preventDefault();
     const el = e.target.closest(".mockup-view");
-    const tr = el.closest("tr");
-    const jobId = tr?.querySelector(".pill")?.textContent?.trim() || "";
-    const jobName = tr?.children?.[2]?.textContent?.trim() || "";
+    const row = rowForTarget(e.target);
     openViewer({
-      jobId,
-      jobName,
+      jobId: row?.jobId ?? "",
+      jobName: row?.jobName ?? "",
       url: el.dataset.url,
       filename: el.dataset.filename,
       mime: el.dataset.mime,
@@ -637,9 +768,13 @@ tbody.addEventListener("click", (e) => {
   }
 
   
-});
+}
+tbody.addEventListener("click", handleJobsClick);
+kanbanEl.addEventListener("click", handleJobsClick);
 searchEl.addEventListener("input", applyFilter);
 refreshBtn.addEventListener("click", load);
+listViewBtn.addEventListener("click", () => setView("list"));
+kanbanViewBtn.addEventListener("click", () => setView("kanban"));
 
 // Init
 load();

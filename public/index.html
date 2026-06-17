@@ -47,6 +47,32 @@
       margin-bottom: 12px;
     }
 
+    .view-toggle {
+      display: inline-flex;
+      gap: 0;
+      border: 1px solid var(--btnSoftBorder);
+      border-radius: var(--radiusSm);
+      overflow: hidden;
+      background: var(--surface);
+    }
+
+    .view-tab {
+      border: 0;
+      border-radius: 0;
+      background: var(--surface);
+      color: var(--text);
+      min-height: 48px;
+    }
+
+    .view-tab + .view-tab {
+      border-left: 1px solid var(--btnSoftBorder);
+    }
+
+    .view-tab.active {
+      background: var(--btn);
+      color: var(--btnText);
+    }
+
     input, select {
       padding: 12px 14px;
       font-size: 1em;
@@ -180,6 +206,25 @@
       background: #f0e6ff;
     }
 
+    .kanban-column.group-outsource-north .kanban-column-header {
+      background: #e8e9ff;
+    }
+    .kanban-column.group-prepared-to-send-north .kanban-column-header {
+      background: #fff0d9;
+    }
+    .kanban-column.group-delivered-north .kanban-column-header {
+      background: #e3edff;
+    }
+    .kanban-column.group-in-work-north .kanban-column-header {
+      background: #dff8ee;
+    }
+    .kanban-column.group-finished-north .kanban-column-header {
+      background: #e2fae7;
+    }
+    .kanban-column.group-arrived-to-pm-north .kanban-column-header {
+      background: #f0e6ff;
+    }
+
     /* Row tinting (lighter than the group header) */
     tr.row-outsource-north td {
       background: rgba(99, 102, 241, 0.06);
@@ -293,6 +338,89 @@
       padding: 6px 10px;
       font-size: inherit;
     }
+
+    .kanban {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 12px;
+      align-items: start;
+    }
+
+    .kanban[hidden] {
+      display: none;
+    }
+
+    .kanban-column {
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: var(--surface);
+      min-width: 0;
+    }
+
+    .kanban-column-header {
+      display: flex;
+      justify-content: space-between;
+      gap: 8px;
+      align-items: center;
+      padding: 10px 12px;
+      border-bottom: 1px solid var(--border);
+      background: var(--header);
+      font-weight: 700;
+    }
+
+    .kanban-column-body {
+      display: grid;
+      gap: 10px;
+      padding: 10px;
+    }
+
+    .kanban-card {
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: #fff;
+      padding: 10px;
+      min-width: 0;
+    }
+
+    .kanban-card-head,
+    .kanban-actions {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .kanban-title {
+      margin-top: 8px;
+      font-weight: 700;
+      overflow-wrap: anywhere;
+    }
+
+    .kanban-meta {
+      display: grid;
+      grid-template-columns: max-content minmax(0, 1fr);
+      gap: 4px 8px;
+      margin: 10px 0;
+      font-size: 0.85em;
+    }
+
+    .kanban-meta dt {
+      color: var(--muted);
+    }
+
+    .kanban-meta dd {
+      margin: 0;
+      overflow-wrap: anywhere;
+    }
+
+    .kanban-mockups {
+      margin: 8px 0;
+    }
+
+    .kanban-actions button {
+      padding: 8px 10px;
+      font-size: 0.85em;
+    }
   </style>
 </head>
 
@@ -301,13 +429,17 @@
 
   <div class="bar">
     <button id="refreshBtn">Refresh</button>
+    <div class="view-toggle" role="tablist" aria-label="View">
+      <button id="listViewBtn" class="view-tab active" type="button" role="tab" aria-selected="true">Full list</button>
+      <button id="kanbanViewBtn" class="view-tab" type="button" role="tab" aria-selected="false">Priority kanban</button>
+    </div>
     <input id="search" placeholder="Search Job ID…" />
     <span id="status" class="status">Idle</span>
   </div>
 
   <div id="error" class="error"></div>
 
-  <table>
+  <table id="jobsTable">
     <thead>
       <tr>
         <th>Job ID</th>
@@ -330,6 +462,8 @@
       </tr>
     </tbody>
   </table>
+
+  <div id="kanban" class="kanban" hidden></div>
 
   <!-- Attachment viewer modal -->
   <div id="viewerBackdrop" class="modal-backdrop" role="dialog" aria-modal="true" aria-hidden="true">

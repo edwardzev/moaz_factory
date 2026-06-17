@@ -1,6 +1,8 @@
 const BASE_ID  = "appgJ2DCTbxQLzK2S";
 const TABLE_ID = "tbloqSi9cbJUSa5JV";
-const VIEW_ID  = "viwRkYqu8uDdjkNK0";
+const OUTSOURCE_NORTH_VIEW_ID = "viwRkYqu8uDdjkNK0";
+const PRIORITY_VIEW_NAME = "Priority";
+const OUTSOURCE_NORTH_NOT_EMPTY_FORMULA = "LEN({Outsource North} & '') > 0";
 
 // Fields shown in the Job-ID popup (order matters; names must match Airtable exactly)
 const ORDER_FIELD_ORDER = [
@@ -31,8 +33,19 @@ const ORDER_FIELD_ORDER = [
 ];
 
 export default async function handler(req, res) {
+  const requestUrl = new URL(req.url, "http://localhost");
+  const requestedView = String(requestUrl.searchParams.get("view") || "").trim().toLowerCase();
+  const airtableParams = new URLSearchParams();
+
+  if (requestedView === "priority") {
+    airtableParams.set("view", PRIORITY_VIEW_NAME);
+    airtableParams.set("filterByFormula", OUTSOURCE_NORTH_NOT_EMPTY_FORMULA);
+  } else {
+    airtableParams.set("view", OUTSOURCE_NORTH_VIEW_ID);
+  }
+
   const url =
-    `https://api.airtable.com/v0/${BASE_ID}/${TABLE_ID}?view=${VIEW_ID}`;
+    `https://api.airtable.com/v0/${BASE_ID}/${TABLE_ID}?${airtableParams.toString()}`;
 
   const r = await fetch(url, {
     headers: {
