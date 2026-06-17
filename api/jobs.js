@@ -2,7 +2,6 @@ const BASE_ID  = "appgJ2DCTbxQLzK2S";
 const TABLE_ID = "tbloqSi9cbJUSa5JV";
 const OUTSOURCE_NORTH_VIEW_ID = "viwRkYqu8uDdjkNK0";
 const PRIORITY_VIEW_NAME = "Priority";
-const OUTSOURCE_NORTH_NOT_EMPTY_FORMULA = "LEN({Outsource North} & '') > 0";
 
 // Fields shown in the Job-ID popup (order matters; names must match Airtable exactly)
 const ORDER_FIELD_ORDER = [
@@ -39,7 +38,6 @@ export default async function handler(req, res) {
 
   if (requestedView === "priority") {
     airtableParams.set("view", PRIORITY_VIEW_NAME);
-    airtableParams.set("filterByFormula", OUTSOURCE_NORTH_NOT_EMPTY_FORMULA);
   } else {
     airtableParams.set("view", OUTSOURCE_NORTH_VIEW_ID);
   }
