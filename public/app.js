@@ -65,6 +65,12 @@ const GROUP_ORDER = [
   "arrived to pm north",
 ];
 const GROUP_WEIGHT = new Map(GROUP_ORDER.map((k, i) => [k, i]));
+const PRIORITY_COLUMN_ORDER = [
+  "Uncategorized",
+  "F Orders",
+  "PRT ready",
+  "unclear",
+];
 
 function displayMethod(method) {
   const m = String(method ?? "").trim().toLowerCase();
@@ -484,24 +490,25 @@ function renderTable(rows) {
 }
 
 function renderKanban(rows) {
-  if (!rows.length) {
-    kanbanEl.innerHTML = `<div class="muted">No records</div>`;
-    return;
+  const groups = new Map();
+  for (const label of PRIORITY_COLUMN_ORDER) {
+    groups.set(label, []);
   }
 
-  const groups = new Map();
   for (const row of rows) {
-    const label = String(row.outsourceNorth ?? "").trim() || "—";
+    const label = String(row.printerNumber ?? "").trim() || "Uncategorized";
     if (!groups.has(label)) groups.set(label, []);
     groups.get(label).push(row);
   }
 
   const sortedGroups = [...groups.entries()].sort(([labelA], [labelB]) => {
-    const keyA = statusKey(labelA);
-    const keyB = statusKey(labelB);
-    const weightA = groupWeightFor(keyA);
-    const weightB = groupWeightFor(keyB);
-    if (weightA !== weightB) return weightA - weightB;
+    const indexA = PRIORITY_COLUMN_ORDER.indexOf(labelA);
+    const indexB = PRIORITY_COLUMN_ORDER.indexOf(labelB);
+    if (indexA !== -1 || indexB !== -1) {
+      if (indexA === -1) return 1;
+      if (indexB === -1) return -1;
+      return indexA - indexB;
+    }
     return labelA.localeCompare(labelB);
   });
 
@@ -534,8 +541,7 @@ function renderKanban(rows) {
 
   kanbanEl.innerHTML = sortedGroups
     .map(([label, groupRows]) => {
-      const key = statusKey(label);
-      const slug = slugifyGroup(key);
+      const slug = slugifyGroup(label);
       return `
         <section class="kanban-column group-${escapeHtml(slug)}">
           <div class="kanban-column-header">
@@ -543,7 +549,7 @@ function renderKanban(rows) {
             <span class="pill">${groupRows.length}</span>
           </div>
           <div class="kanban-column-body">
-            ${groupRows.map(cardHtml).join("")}
+            ${groupRows.length ? groupRows.map(cardHtml).join("") : '<div class="muted">No orders</div>'}
           </div>
         </section>
       `;
