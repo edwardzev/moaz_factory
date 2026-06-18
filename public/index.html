@@ -340,10 +340,13 @@
     }
 
     .kanban {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      display: flex;
       gap: 12px;
-      align-items: start;
+      align-items: flex-start;
+      overflow-x: auto;
+      overflow-y: visible;
+      padding-bottom: 12px;
+      scrollbar-gutter: stable;
     }
 
     .kanban[hidden] {
@@ -354,6 +357,7 @@
       border: 1px solid var(--border);
       border-radius: 8px;
       background: var(--surface);
+      flex: 0 0 320px;
       min-width: 0;
     }
 
