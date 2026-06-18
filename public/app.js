@@ -79,6 +79,7 @@ const PRIORITY_COLUMNS = [
 const PRIORITY_VALUES = new Set(PRIORITY_COLUMNS.map((column) => column.value));
 
 let draggedKanbanId = null;
+let pointerDragState = null;
 
 function displayMethod(method) {
   const m = String(method ?? "").trim().toLowerCase();
@@ -512,6 +513,7 @@ function renderKanban(rows) {
   const cardHtml = (row) => `
     <article class="kanban-card" data-id="${escapeHtml(row.id)}" draggable="true">
       <div class="kanban-card-head">
+        <span class="kanban-drag-handle" title="Drag order" aria-label="Drag order"></span>
         <a href="#" class="pill job-emph job-open" style="text-decoration:none;">${escapeHtml(row.jobId)}</a>
         ${displayMethod(row.method).trim() ? `<span class="pill">${escapeHtml(displayMethod(row.method))}</span>` : ""}
       </div>
@@ -675,6 +677,62 @@ async function moveKanbanCard(recordId, printerNumber) {
   }
 }
 
+function clearKanbanDragOver() {
+  kanbanEl.querySelectorAll(".drag-over").forEach((el) => el.classList.remove("drag-over"));
+}
+
+function setKanbanDragOver(column) {
+  clearKanbanDragOver();
+  if (column) column.classList.add("drag-over");
+}
+
+function columnAtPoint(x, y) {
+  return document.elementFromPoint(x, y)?.closest?.(".kanban-column") || null;
+}
+
+function createPointerDragGhost(card, rect) {
+  const ghost = card.cloneNode(true);
+  ghost.classList.add("pointer-drag-ghost");
+  ghost.style.width = `${rect.width}px`;
+  document.body.appendChild(ghost);
+  return ghost;
+}
+
+function movePointerDragGhost(state, x, y) {
+  if (!state.ghost) return;
+  state.ghost.style.left = `${x - state.offsetX}px`;
+  state.ghost.style.top = `${y - state.offsetY}px`;
+}
+
+function scrollKanbanNearEdge(x) {
+  const rect = kanbanEl.getBoundingClientRect();
+  const edge = 56;
+  const step = 24;
+  if (x > rect.right - edge) {
+    kanbanEl.scrollLeft += step;
+  } else if (x < rect.left + edge) {
+    kanbanEl.scrollLeft -= step;
+  }
+}
+
+function cleanupPointerDrag({ shouldMove = false, clientX = 0, clientY = 0 } = {}) {
+  const state = pointerDragState;
+  if (!state) return;
+
+  pointerDragState = null;
+  draggedKanbanId = null;
+  state.card.classList.remove("dragging");
+  state.ghost?.remove();
+  clearKanbanDragOver();
+
+  if (!shouldMove || !state.active) return;
+
+  const column = state.overColumn || columnAtPoint(clientX, clientY);
+  if (!column) return;
+
+  moveKanbanCard(state.recordId, column.dataset.printerValue || "");
+}
+
 // Events
 function handleJobsClick(e) {
   if (e.target.closest(".job-open")) {
@@ -806,6 +864,57 @@ function handleJobsClick(e) {
 }
 tbody.addEventListener("click", handleJobsClick);
 kanbanEl.addEventListener("click", handleJobsClick);
+kanbanEl.addEventListener("pointerdown", (e) => {
+  const handle = e.target.closest(".kanban-drag-handle");
+  const card = e.target.closest(".kanban-card");
+  if (!handle || !card || e.button !== 0) return;
+
+  const recordId = card.dataset.id || "";
+  if (!recordId) return;
+
+  e.preventDefault();
+  const rect = card.getBoundingClientRect();
+  pointerDragState = {
+    pointerId: e.pointerId,
+    recordId,
+    card,
+    startX: e.clientX,
+    startY: e.clientY,
+    offsetX: e.clientX - rect.left,
+    offsetY: e.clientY - rect.top,
+    active: false,
+    ghost: null,
+    overColumn: null,
+  };
+  card.setPointerCapture?.(e.pointerId);
+});
+kanbanEl.addEventListener("pointermove", (e) => {
+  const state = pointerDragState;
+  if (!state || state.pointerId !== e.pointerId) return;
+
+  const distance = Math.hypot(e.clientX - state.startX, e.clientY - state.startY);
+  if (!state.active && distance < 4) return;
+
+  if (!state.active) {
+    const rect = state.card.getBoundingClientRect();
+    state.active = true;
+    state.ghost = createPointerDragGhost(state.card, rect);
+    state.card.classList.add("dragging");
+    draggedKanbanId = state.recordId;
+  }
+
+  e.preventDefault();
+  scrollKanbanNearEdge(e.clientX);
+  movePointerDragGhost(state, e.clientX, e.clientY);
+  state.overColumn = columnAtPoint(e.clientX, e.clientY);
+  setKanbanDragOver(state.overColumn);
+});
+kanbanEl.addEventListener("pointerup", (e) => {
+  if (!pointerDragState || pointerDragState.pointerId !== e.pointerId) return;
+  e.preventDefault();
+  cleanupPointerDrag({ shouldMove: true, clientX: e.clientX, clientY: e.clientY });
+});
+kanbanEl.addEventListener("pointercancel", () => cleanupPointerDrag());
 kanbanEl.addEventListener("dragstart", (e) => {
   const card = e.target.closest(".kanban-card");
   if (!card) return;
@@ -819,7 +928,7 @@ kanbanEl.addEventListener("dragend", (e) => {
   const card = e.target.closest(".kanban-card");
   if (card) card.classList.remove("dragging");
   draggedKanbanId = null;
-  kanbanEl.querySelectorAll(".drag-over").forEach((el) => el.classList.remove("drag-over"));
+  clearKanbanDragOver();
 });
 kanbanEl.addEventListener("dragover", (e) => {
   const column = e.target.closest(".kanban-column");

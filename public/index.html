@@ -400,6 +400,31 @@
       cursor: grabbing;
     }
 
+    .kanban-drag-handle {
+      flex: 0 0 26px;
+      width: 26px;
+      height: 26px;
+      border: 1px solid var(--btnSoftBorder);
+      border-radius: 6px;
+      cursor: grab;
+      touch-action: none;
+      background:
+        radial-gradient(circle, var(--muted) 1.5px, transparent 1.6px)
+        0 0 / 8px 8px;
+      opacity: 0.75;
+    }
+
+    .kanban-drag-handle:active {
+      cursor: grabbing;
+    }
+
+    .pointer-drag-ghost {
+      position: fixed;
+      z-index: 1000;
+      pointer-events: none;
+      box-shadow: 0 12px 30px rgba(17, 24, 39, 0.2);
+    }
+
     .kanban-card-head,
     .kanban-actions {
       display: flex;
