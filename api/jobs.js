@@ -3,6 +3,11 @@ const TABLE_ID = "tbloqSi9cbJUSa5JV";
 const OUTSOURCE_NORTH_VIEW_ID = "viwRkYqu8uDdjkNK0";
 const PRIORITY_VIEW_NAME = "Priority";
 const OUTSOURCE_NORTH_NOT_EMPTY_FORMULA = "LEN({Outsource North} & '') > 0";
+const AIRTABLE_LOCALE_PARAMS = {
+  cellFormat: "string",
+  timeZone: "UTC",
+  userLocale: "en-us",
+};
 
 // Fields shown in the Job-ID popup (order matters; names must match Airtable exactly)
 const ORDER_FIELD_ORDER = [
@@ -34,6 +39,30 @@ const ORDER_FIELD_ORDER = [
   "Meters",
 ];
 
+function scalarText(value) {
+  if (value === null || value === undefined) return "";
+  if (Array.isArray(value)) return value.filter(Boolean).join(", ");
+  return String(value);
+}
+
+async function fetchManagerTextByRecordId(airtableParams, headers) {
+  const params = new URLSearchParams(airtableParams);
+  params.set("cellFormat", AIRTABLE_LOCALE_PARAMS.cellFormat);
+  params.set("timeZone", AIRTABLE_LOCALE_PARAMS.timeZone);
+  params.set("userLocale", AIRTABLE_LOCALE_PARAMS.userLocale);
+  params.append("fields[]", "Manager");
+
+  const url = `https://api.airtable.com/v0/${BASE_ID}/${TABLE_ID}?${params.toString()}`;
+  const response = await fetch(url, { headers });
+
+  if (!response.ok) return new Map();
+
+  const data = await response.json();
+  return new Map(
+    (data.records || []).map(rec => [rec.id, scalarText(rec.fields?.["Manager"])])
+  );
+}
+
 export default async function handler(req, res) {
   const requestUrl = new URL(req.url, "http://localhost");
   const requestedView = String(requestUrl.searchParams.get("view") || "").trim().toLowerCase();
@@ -48,12 +77,11 @@ export default async function handler(req, res) {
 
   const url =
     `https://api.airtable.com/v0/${BASE_ID}/${TABLE_ID}?${airtableParams.toString()}`;
+  const headers = {
+    Authorization: `Bearer ${process.env.AIRTABLE_TOKEN}`,
+  };
 
-  const r = await fetch(url, {
-    headers: {
-      Authorization: `Bearer ${process.env.AIRTABLE_TOKEN}`,
-    },
-  });
+  const r = await fetch(url, { headers });
 
   const data = await r.json();
 
@@ -61,38 +89,45 @@ export default async function handler(req, res) {
     return res.status(r.status).json(data);
   }
 
-  res.json(
-    data.records.map(rec => ({
-      id: rec.id,
-      jobId: rec.fields["JOB ID"],
-      clientNameText: rec.fields["Client name text"] ?? "",
-      jobName: rec.fields["Job Name"] ?? "",
-      outsourceNorth: rec.fields["Outsource North"] ?? "",
-      printerNumber: rec.fields["Printer number"] ?? "",
-      manager: rec.fields["Manager"] ?? rec.fields["Manager Field"] ?? "",
-      materialOnlyPress: rec.fields["Material only"] ?? "",
-      // Airtable attachment field: array of { id, url, filename, type, thumbnails, ... }
-      mockup: Array.isArray(rec.fields["Mock up"]) ? rec.fields["Mock up"] : [],
-      method: rec.fields["Method"] ?? "",
-      cartonIn: rec.fields["Carton IN"] ?? null,
-      impressions: rec.fields["Impressions"],
-      // If Impr_left is blank/undefined, default it to the original
-      // `Impressions` value (initial quantity). This treats an empty
-      // Impr_left as meaning "no progress yet" rather than zero.
-      impr_left: Number(
-        (rec.fields["Impr_left"] === undefined || rec.fields["Impr_left"] === "")
-          ? (rec.fields["Impressions"] ?? 0)
-          : rec.fields["Impr_left"]
-      ),
-      rikmaMachine: rec.fields["Rikma Machine"] ?? null,
-      impr_log: rec.fields["Impr_log"] ?? "",
-      meters: rec.fields["Meters"] ?? null,
+  const managerTextByRecordId = await fetchManagerTextByRecordId(airtableParams, headers);
 
-      // Exact Airtable-field popup payload
-      order: ORDER_FIELD_ORDER.reduce((acc, fieldName) => {
-        acc[fieldName] = rec.fields[fieldName] ?? null;
-        return acc;
-      }, {}),
-    }))
+  res.json(
+    data.records.map(rec => {
+      const managerText = managerTextByRecordId.get(rec.id);
+      const managerFallback = rec.fields["Manager"] ?? rec.fields["Manager Field"] ?? "";
+
+      return {
+        id: rec.id,
+        jobId: rec.fields["JOB ID"],
+        clientNameText: rec.fields["Client name text"] ?? "",
+        jobName: rec.fields["Job Name"] ?? "",
+        outsourceNorth: rec.fields["Outsource North"] ?? "",
+        printerNumber: rec.fields["Printer number"] ?? "",
+        manager: managerText || scalarText(managerFallback),
+        materialOnlyPress: rec.fields["Material only"] ?? "",
+        // Airtable attachment field: array of { id, url, filename, type, thumbnails, ... }
+        mockup: Array.isArray(rec.fields["Mock up"]) ? rec.fields["Mock up"] : [],
+        method: rec.fields["Method"] ?? "",
+        cartonIn: rec.fields["Carton IN"] ?? null,
+        impressions: rec.fields["Impressions"],
+        // If Impr_left is blank/undefined, default it to the original
+        // `Impressions` value (initial quantity). This treats an empty
+        // Impr_left as meaning "no progress yet" rather than zero.
+        impr_left: Number(
+          (rec.fields["Impr_left"] === undefined || rec.fields["Impr_left"] === "")
+            ? (rec.fields["Impressions"] ?? 0)
+            : rec.fields["Impr_left"]
+        ),
+        rikmaMachine: rec.fields["Rikma Machine"] ?? null,
+        impr_log: rec.fields["Impr_log"] ?? "",
+        meters: rec.fields["Meters"] ?? null,
+
+        // Exact Airtable-field popup payload
+        order: ORDER_FIELD_ORDER.reduce((acc, fieldName) => {
+          acc[fieldName] = rec.fields[fieldName] ?? null;
+          return acc;
+        }, {}),
+      };
+    })
   );
 }
