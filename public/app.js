@@ -268,6 +268,51 @@ function mockupsCell(mockups) {
     .join("");
 }
 
+function kanbanMockupsCell(mockups) {
+  const items = Array.isArray(mockups) ? mockups : [];
+  if (!items.length) return `<span class="muted">—</span>`;
+
+  return items
+    .map((a) => {
+      const url = a?.url;
+      const filename = a?.filename || "file";
+      const mime = a?.type || "";
+      if (!url) return "";
+
+      const thumb =
+        a?.thumbnails?.small?.url ||
+        a?.thumbnails?.large?.url ||
+        a?.thumbnails?.full?.url ||
+        null;
+
+      const img = thumb
+        ? `<img src="${escapeHtml(thumb)}" alt="${escapeHtml(filename)}" style="width:56px;height:auto;border:1px solid #ddd;"/>`
+        : `<span class="pill">${escapeHtml(filename)}</span>`;
+
+      return `
+        <div style="display:inline-block;margin-right:8px;margin-bottom:6px;vertical-align:top;">
+          <a
+            href="#"
+            class="mockup-view"
+            data-url="${escapeHtml(url)}"
+            data-filename="${escapeHtml(filename)}"
+            data-mime="${escapeHtml(mime)}"
+            title="View ${escapeHtml(filename)}"
+            style="display:inline-block;text-decoration:none;"
+          >
+            ${img}
+          </a>
+          <div style="margin-top:4px;">
+            <a href="#" class="mockup-view muted" data-url="${escapeHtml(url)}" data-filename="${escapeHtml(filename)}" data-mime="${escapeHtml(mime)}" style="text-decoration:underline;">view</a>
+            <span class="muted"> · </span>
+            <a href="#" class="mockup-download muted" data-url="${escapeHtml(url)}" data-filename="${escapeHtml(filename)}" style="text-decoration:underline;">download</a>
+          </div>
+        </div>
+      `;
+    })
+    .join("");
+}
+
 function openOrderModal(row) {
   const jobId = row?.jobId ?? "";
   const jobName = row?.jobName ?? "";
@@ -543,7 +588,7 @@ function renderKanban(rows) {
         <dt>Meters</dt>
         <dd>${row.meters != null ? escapeHtml(row.meters) : '<span class="muted">—</span>'}</dd>
       </dl>
-      <div class="kanban-mockups">${mockupsCell(row.mockup)}</div>
+      <div class="kanban-mockups">${kanbanMockupsCell(row.mockup)}</div>
     </article>
   `;
 
