@@ -9,6 +9,8 @@ const ORDER_FIELD_ORDER = [
   "Impressions",
   "Client name text",
   "Job Name",
+  "Product clent brings",
+  "products to buy",
   "Method",
   "Mock up",
   "Deadline",

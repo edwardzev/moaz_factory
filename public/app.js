@@ -32,6 +32,8 @@ const ORDER_FIELD_ORDER = [
   "Impressions",
   "Client name text",
   "Job Name",
+  "Product clent brings",
+  "products to buy",
   "Method",
   "Mock up",
   "Deadline",
@@ -54,6 +56,11 @@ const ORDER_FIELD_ORDER = [
   "Printed North",
   "Meters",
 ];
+
+const READ_ONLY_TEXT_FIELDS = new Set([
+  "Product clent brings",
+  "products to buy",
+]);
 
 const GROUP_ORDER = [
   "outsource north",
@@ -184,6 +191,23 @@ function fmtScalar(v) {
   if (typeof v === "boolean") return escapeHtml(v ? "Yes" : "No");
   if (typeof v === "number") return escapeHtml(String(v));
   return escapeHtml(String(v));
+}
+
+function readOnlyTextValue(v) {
+  if (v === null || v === undefined) return "";
+  if (Array.isArray(v)) return v.filter(item => item !== null && item !== undefined && item !== "").join(", ");
+  return String(v);
+}
+
+function readOnlyTextField(v) {
+  const value = readOnlyTextValue(v);
+  return `
+    <textarea
+      readonly
+      aria-readonly="true"
+      placeholder="—"
+      style="width:100%;min-height:48px;box-sizing:border-box;padding:8px 10px;font:inherit;line-height:1.35;border:1px solid var(--border);border-radius:var(--radiusSm);background:var(--header);color:var(--text);resize:vertical;"
+    >${escapeHtml(value)}</textarea>`;
 }
 
 function attachmentsList(items, { jobId, jobName }) {
@@ -368,6 +392,8 @@ function openOrderModal(row) {
     } else if (fieldName === "Method") {
       const m = displayMethod(v);
       rendered = m.trim() ? escapeHtml(m) : `<span class="muted">—</span>`;
+    } else if (READ_ONLY_TEXT_FIELDS.has(fieldName)) {
+      rendered = readOnlyTextField(v);
     } else if (isAirtableAttachmentArray(v)) {
       rendered = attachmentsList(v, { jobId, jobName });
     } else if (Array.isArray(v)) {
