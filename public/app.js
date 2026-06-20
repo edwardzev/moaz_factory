@@ -62,6 +62,13 @@ const READ_ONLY_TEXT_FIELDS = new Set([
   "products to buy",
 ]);
 
+const EDITABLE_ORDER_NUMBER_FIELDS = new Set([
+  "Number 1",
+  "Number 2",
+  "Number 3",
+  "Number 4",
+]);
+
 const MATERIAL_ONLY_CARD_LABELS = new Map([
   ["לא, אני צריך רק חומרים", "Material only"],
   ["לא אני צריך רק חומרים", "Material only"],
@@ -240,6 +247,15 @@ function readOnlyTextField(v) {
       placeholder="—"
       style="width:100%;min-height:48px;box-sizing:border-box;padding:8px 10px;font:inherit;line-height:1.35;border:1px solid var(--border);border-radius:var(--radiusSm);background:var(--header);color:var(--text);resize:vertical;"
     >${escapeHtml(value)}</textarea>`;
+}
+
+function editableOrderNumberField({ recordId, fieldName, value }) {
+  const current = value != null ? escapeHtml(String(value)) : "";
+  return `
+    <div data-order-number-editor style="display:flex;align-items:center;gap:8px;">
+      <input type="number" class="order-number-input" data-record-id="${escapeHtml(recordId)}" data-field="${escapeHtml(fieldName)}" value="${current}" step="any" style="width:120px;padding:8px 10px;font-size:1em;border:1px solid var(--border);border-radius:var(--radiusSm);background:var(--surface);color:var(--text);" />
+      <button type="button" class="order-number-submit" data-record-id="${escapeHtml(recordId)}" data-field="${escapeHtml(fieldName)}" style="padding:8px 14px;font-size:0.9em;">Save</button>
+    </div>`;
 }
 
 function attachmentsList(items, { jobId, jobName }) {
@@ -424,6 +440,8 @@ function openOrderModal(row) {
     } else if (fieldName === "Method") {
       const m = displayMethod(v);
       rendered = m.trim() ? escapeHtml(m) : `<span class="muted">—</span>`;
+    } else if (EDITABLE_ORDER_NUMBER_FIELDS.has(fieldName)) {
+      rendered = editableOrderNumberField({ recordId: row.id, fieldName, value: v });
     } else if (fieldName === "Deadline") {
       rendered = fmtDeadline(v);
     } else if (READ_ONLY_TEXT_FIELDS.has(fieldName)) {
@@ -564,6 +582,55 @@ viewerBackdrop.addEventListener("click", (e) => {
       .catch((err) => {
         setError(err?.message || String(err));
         alert("Failed to save Cartons Out. See error above.");
+        btn.textContent = "Save";
+      })
+      .finally(() => {
+        btn.disabled = false;
+      });
+    return;
+  }
+
+  if (e.target.closest(".order-number-submit")) {
+    const btn = e.target.closest(".order-number-submit");
+    const recordId = btn.dataset.recordId;
+    const fieldName = btn.dataset.field;
+    const editor = btn.closest("[data-order-number-editor]");
+    const input = editor?.querySelector(".order-number-input");
+    if (!input || !EDITABLE_ORDER_NUMBER_FIELDS.has(fieldName)) return;
+
+    const rawValue = input.value.trim();
+    if (rawValue !== "" && !Number.isFinite(Number(rawValue))) {
+      alert(`Please enter a valid number for ${fieldName}.`);
+      return;
+    }
+
+    btn.disabled = true;
+    btn.textContent = "Saving…";
+    setError("");
+
+    fetch("/api/order-numbers", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        id: recordId,
+        fieldName,
+        value: rawValue === "" ? null : Number(rawValue),
+      }),
+    })
+      .then(async (r) => {
+        if (!r.ok) throw new Error(await r.text());
+        const result = await r.json().catch(() => ({}));
+        const row = allRows.find(item => item.id === recordId);
+        if (row?.order && typeof row.order === "object") {
+          row.order[fieldName] = result.value ?? null;
+        }
+        btn.textContent = "Saved ✓";
+        setTimeout(() => { btn.textContent = "Save"; }, 1500);
+        await load();
+      })
+      .catch((err) => {
+        setError(err?.message || String(err));
+        alert(`Failed to save ${fieldName}. See error above.`);
         btn.textContent = "Save";
       })
       .finally(() => {
