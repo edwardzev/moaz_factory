@@ -534,6 +534,8 @@ function renderKanban(rows) {
       <dl class="kanban-meta">
         <dt>Client</dt>
         <dd>${escapeHtml(row.clientNameText ?? "")}</dd>
+        <dt>Material only/Material+Press</dt>
+        <dd>${escapeHtml(row.materialOnlyPress ?? "")}</dd>
         <dt>Carton IN</dt>
         <dd>${escapeHtml(row.cartonIn ?? "")}</dd>
         <dt>Impressions</dt>
@@ -542,12 +544,6 @@ function renderKanban(rows) {
         <dd>${row.meters != null ? escapeHtml(row.meters) : '<span class="muted">—</span>'}</dd>
       </dl>
       <div class="kanban-mockups">${mockupsCell(row.mockup)}</div>
-      <div class="kanban-actions">
-        <button class="product-in" type="button">Product in</button>
-        <button class="start" type="button">Start</button>
-        <button class="ready-sent" type="button" data-action="ready">Ready</button>
-        <button class="ready-sent" type="button" data-action="sent">Sent</button>
-      </div>
     </article>
   `;
 
