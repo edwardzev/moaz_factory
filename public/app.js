@@ -347,6 +347,7 @@ function openOrderModal(row) {
         <div style="display:flex;align-items:center;gap:8px;">
           <input type="number" class="meters-input" data-record-id="${escapeHtml(row.id)}" value="${current}" step="any" style="width:120px;padding:8px 10px;font-size:1em;border:1px solid var(--border);border-radius:var(--radiusSm);background:var(--surface);color:var(--text);" />
           <button type="button" class="meters-submit" data-record-id="${escapeHtml(row.id)}" style="padding:8px 14px;font-size:0.9em;">Save</button>
+          <span class="muted" style="font-size:0.9em;">note: write x2 of actual meters.</span>
         </div>`;
     } else if (fieldName === "Printed North") {
       // Editable single-select with submit button
