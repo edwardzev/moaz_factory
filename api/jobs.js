@@ -69,6 +69,7 @@ export default async function handler(req, res) {
       jobName: rec.fields["Job Name"] ?? "",
       outsourceNorth: rec.fields["Outsource North"] ?? "",
       printerNumber: rec.fields["Printer number"] ?? "",
+      manager: rec.fields["Manager"] ?? rec.fields["Manager Field"] ?? "",
       materialOnlyPress: rec.fields["Material only"] ?? "",
       // Airtable attachment field: array of { id, url, filename, type, thumbnails, ... }
       mockup: Array.isArray(rec.fields["Mock up"]) ? rec.fields["Mock up"] : [],

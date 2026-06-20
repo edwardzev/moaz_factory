@@ -698,6 +698,8 @@ function renderKanban(rows) {
       <dl class="kanban-meta">
         <dt>Client</dt>
         <dd>${escapeHtml(row.clientNameText ?? "")}</dd>
+        <dt>Manager</dt>
+        <dd>${escapeHtml(row.manager ?? "")}</dd>
         <dt>Material only/Material+Press</dt>
         <dd>${escapeHtml(row.materialOnlyPress ?? "")}</dd>
         <dt>Carton IN</dt>
