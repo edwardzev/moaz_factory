@@ -863,7 +863,15 @@ async function moveKanbanCard(recordId, printerNumber) {
     });
 
     if (!r.ok) throw new Error(await r.text());
+    const result = await r.json().catch(() => ({}));
     await load();
+
+    if (result?.webhook && result.webhook.ok === false) {
+      const status = result.webhook.status ? ` (${result.webhook.status})` : "";
+      const detail = result.webhook.error || result.webhook.response || "Unknown webhook error";
+      setError(`Truck left webhook failed${status}\n${detail}`);
+      alert("Truck left saved, but webhook failed. See error above.");
+    }
   } catch (err) {
     row.printerNumber = currentValue;
     applyFilter();
