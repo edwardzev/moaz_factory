@@ -3,14 +3,21 @@ const TABLE_ID = "tbloqSi9cbJUSa5JV";
 
 const ALLOWED_PRINTER_NUMBERS = new Set([
   "",
-  "PRT ready",
+  "Go North",
+  "Delivered Outsource",
   "Unclear",
+  "unclear",
+  "PRT ready",
+  "Sample",
+  "Sample Approved",
   "Big mama",
   "Sublimation",
   "UV DTF",
   "Printed Material North",
+  "Printed material north",
   "Press Started",
   "Press Finished",
+  "Truck left",
 ]);
 
 export default async function handler(req, res) {

@@ -66,17 +66,26 @@ const GROUP_ORDER = [
 ];
 const GROUP_WEIGHT = new Map(GROUP_ORDER.map((k, i) => [k, i]));
 const PRIORITY_COLUMNS = [
-  { value: "", label: "Incoming" },
-  { value: "PRT ready", label: "PRT ready" },
-  { value: "Unclear", label: "Unclear" },
-  { value: "Big mama", label: "Big DTF" },
-  { value: "Sublimation", label: "Sublimation" },
-  { value: "UV DTF", label: "UV DTF" },
-  { value: "Printed Material North", label: "Printed material north" },
-  { value: "Press Started", label: "Press Started" },
-  { value: "Press Finished", label: "Press Finished" },
+  { key: "incoming", values: ["", "Go North", "Uncategorized"], writeValue: "Go North", label: "Incoming" },
+  { key: "delivered-outsource", values: ["Delivered Outsource"], writeValue: "Delivered Outsource", label: "Delivered Outsource" },
+  { key: "unclear", values: ["Unclear", "unclear"], writeValue: "Unclear", label: "Unclear" },
+  { key: "prt-ready", values: ["PRT ready"], writeValue: "PRT ready", label: "PRT ready" },
+  { key: "sample", values: ["Sample"], writeValue: "Sample", label: "Sample" },
+  { key: "sample-approved", values: ["Sample Approved"], writeValue: "Sample Approved", label: "Sample Approved" },
+  { key: "big-dtf", values: ["Big mama"], writeValue: "Big mama", label: "Big DTF" },
+  { key: "sublimation", values: ["Sublimation"], writeValue: "Sublimation", label: "Sublimation" },
+  { key: "uv-dtf", values: ["UV DTF"], writeValue: "UV DTF", label: "UV DTF" },
+  { key: "printed-material-north", values: ["Printed Material North", "Printed material north"], writeValue: "Printed Material North", label: "Printed material north" },
+  { key: "press-started", values: ["Press Started"], writeValue: "Press Started", label: "Press Started" },
+  { key: "press-finished", values: ["Press Finished"], writeValue: "Press Finished", label: "Press Finished" },
+  { key: "truck-left", values: ["Truck left"], writeValue: "Truck left", label: "Truck left" },
 ];
-const PRIORITY_VALUES = new Set(PRIORITY_COLUMNS.map((column) => column.value));
+const PRIORITY_COLUMN_BY_VALUE = new Map();
+for (const column of PRIORITY_COLUMNS) {
+  for (const value of column.values) {
+    PRIORITY_COLUMN_BY_VALUE.set(value, column);
+  }
+}
 
 let draggedKanbanId = null;
 let pointerDragState = null;
@@ -109,6 +118,10 @@ function statusKey(s) {
   if (regionNormalized === "arrived to pm") return "arrived to pm north";
 
   return regionNormalized;
+}
+
+function priorityColumnForValue(value) {
+  return PRIORITY_COLUMN_BY_VALUE.get(String(value ?? "").trim()) || null;
 }
 
 function groupWeightFor(key) {
@@ -501,13 +514,13 @@ function renderTable(rows) {
 function renderKanban(rows) {
   const groups = new Map();
   for (const column of PRIORITY_COLUMNS) {
-    groups.set(column.value, []);
+    groups.set(column.key, []);
   }
 
   for (const row of rows) {
-    const value = String(row.printerNumber ?? "").trim();
-    if (!PRIORITY_VALUES.has(value)) continue;
-    groups.get(value).push(row);
+    const column = priorityColumnForValue(row.printerNumber);
+    if (!column) continue;
+    groups.get(column.key).push(row);
   }
 
   const cardHtml = (row) => `
@@ -540,10 +553,10 @@ function renderKanban(rows) {
 
   kanbanEl.innerHTML = PRIORITY_COLUMNS
     .map((column) => {
-      const groupRows = groups.get(column.value) || [];
+      const groupRows = groups.get(column.key) || [];
       const slug = slugifyGroup(column.label);
       return `
-        <section class="kanban-column group-${escapeHtml(slug)}" data-printer-value="${escapeHtml(column.value)}">
+        <section class="kanban-column group-${escapeHtml(slug)}" data-printer-value="${escapeHtml(column.writeValue)}">
           <div class="kanban-column-header">
             <span>${escapeHtml(column.label)}</span>
             <span class="pill">${groupRows.length}</span>
@@ -652,7 +665,9 @@ async function moveKanbanCard(recordId, printerNumber) {
 
   const currentValue = String(row.printerNumber ?? "").trim();
   const nextValue = String(printerNumber ?? "").trim();
-  if (currentValue === nextValue) return;
+  const currentColumn = priorityColumnForValue(currentValue);
+  const nextColumn = priorityColumnForValue(nextValue);
+  if (currentValue === nextValue || (currentColumn && currentColumn === nextColumn)) return;
 
   setError("");
   setStatus("Saving Priority column…");
