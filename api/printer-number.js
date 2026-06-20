@@ -2,24 +2,36 @@ const BASE_ID = "appgJ2DCTbxQLzK2S";
 const TABLE_ID = "tbloqSi9cbJUSa5JV";
 const TRUCK_LEFT_VALUE = "Truck left";
 
-const ALLOWED_PRINTER_NUMBERS = new Set([
+const PRINTER_NUMBER_VALUES = new Set([
   "",
   "Go North",
-  "Delivered Outsource",
-  "Unclear",
+  "Delivered outsource",
   "unclear",
   "PRT ready",
   "Sample",
   "Sample Approved",
-  "Big mama",
+  "BIG MAMA",
   "Sublimation",
   "UV DTF",
   "Printed Material North",
-  "Printed material north",
   "Press Started",
   "Press Finished",
   TRUCK_LEFT_VALUE,
 ]);
+
+const PRINTER_NUMBER_ALIASES = new Map([
+  ["Delivered Outsource", "Delivered outsource"],
+  ["Unclear", "unclear"],
+  ["Big mama", "BIG MAMA"],
+  ["Printed material north", "Printed Material North"],
+]);
+
+function normalizePrinterNumber(value) {
+  const text = value === null || value === undefined
+    ? ""
+    : String(value).trim();
+  return PRINTER_NUMBER_ALIASES.get(text) || text;
+}
 
 async function sendTruckLeftWebhook(recordId) {
   const webhookUrl = process.env.PABBLY_TRUCK_LEFT_WEBHOOK_URL;
@@ -53,14 +65,12 @@ export default async function handler(req, res) {
   }
 
   const { id: recordId, printerNumber } = req.body || {};
-  const value = printerNumber === null || printerNumber === undefined
-    ? ""
-    : String(printerNumber).trim();
+  const value = normalizePrinterNumber(printerNumber);
 
   if (!recordId) {
     return res.status(400).json({ error: "Missing record id" });
   }
-  if (!ALLOWED_PRINTER_NUMBERS.has(value)) {
+  if (!PRINTER_NUMBER_VALUES.has(value)) {
     return res.status(400).json({ error: "Invalid Printer number value" });
   }
 

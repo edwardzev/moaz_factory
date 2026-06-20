@@ -83,12 +83,12 @@ const GROUP_ORDER = [
 const GROUP_WEIGHT = new Map(GROUP_ORDER.map((k, i) => [k, i]));
 const PRIORITY_COLUMNS = [
   { key: "incoming", values: ["", "Go North", "Uncategorized"], writeValue: "Go North", label: "Incoming" },
-  { key: "delivered-outsource", values: ["Delivered Outsource"], writeValue: "Delivered Outsource", label: "Delivered Outsource" },
-  { key: "unclear", values: ["Unclear", "unclear"], writeValue: "Unclear", label: "Unclear" },
+  { key: "delivered-outsource", values: ["Delivered outsource", "Delivered Outsource"], writeValue: "Delivered outsource", label: "Delivered Outsource" },
+  { key: "unclear", values: ["unclear", "Unclear"], writeValue: "unclear", label: "Unclear" },
   { key: "prt-ready", values: ["PRT ready"], writeValue: "PRT ready", label: "PRT ready" },
   { key: "sample", values: ["Sample"], writeValue: "Sample", label: "Sample" },
   { key: "sample-approved", values: ["Sample Approved"], writeValue: "Sample Approved", label: "Sample Approved" },
-  { key: "big-dtf", values: ["Big mama"], writeValue: "Big mama", label: "Big DTF" },
+  { key: "big-dtf", values: ["BIG MAMA", "Big mama"], writeValue: "BIG MAMA", label: "Big DTF" },
   { key: "sublimation", values: ["Sublimation"], writeValue: "Sublimation", label: "Sublimation" },
   { key: "uv-dtf", values: ["UV DTF"], writeValue: "UV DTF", label: "UV DTF" },
   { key: "printed-material-north", values: ["Printed Material North", "Printed material north"], writeValue: "Printed Material North", label: "Printed material north" },
