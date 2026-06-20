@@ -322,9 +322,25 @@ function openOrderModal(row) {
   const order = row?.order && typeof row.order === "object" ? row.order : {};
   const lines = ORDER_FIELD_ORDER.map((fieldName) => {
     const v = order[fieldName];
+    const displayFieldName = fieldName === "# of packages" ? "Cartons Out" : fieldName;
     let rendered;
 
-    if (fieldName === "Meters") {
+    if (fieldName === "Carton IN") {
+      const current = v != null ? escapeHtml(String(v)) : "";
+      rendered = `
+        <div style="display:flex;align-items:center;gap:8px;">
+          <input type="number" class="carton-in-input" data-record-id="${escapeHtml(row.id)}" value="${current}" step="any" min="0" style="width:120px;padding:8px 10px;font-size:1em;border:1px solid var(--border);border-radius:var(--radiusSm);background:var(--surface);color:var(--text);" />
+          <button type="button" class="carton-in-submit" data-record-id="${escapeHtml(row.id)}" style="padding:8px 14px;font-size:0.9em;">Save</button>
+        </div>`;
+    } else if (fieldName === "# of packages") {
+      const defaultValue = v != null ? v : order["Carton IN"];
+      const current = defaultValue != null ? escapeHtml(String(defaultValue)) : "";
+      rendered = `
+        <div style="display:flex;align-items:center;gap:8px;">
+          <input type="number" class="cartons-out-input" data-record-id="${escapeHtml(row.id)}" value="${current}" step="any" min="0" style="width:120px;padding:8px 10px;font-size:1em;border:1px solid var(--border);border-radius:var(--radiusSm);background:var(--surface);color:var(--text);" />
+          <button type="button" class="cartons-out-submit" data-record-id="${escapeHtml(row.id)}" style="padding:8px 14px;font-size:0.9em;">Save</button>
+        </div>`;
+    } else if (fieldName === "Meters") {
       // Editable number input with submit button
       const current = v != null ? escapeHtml(String(v)) : "";
       rendered = `
@@ -361,7 +377,7 @@ function openOrderModal(row) {
 
     return `
       <tr>
-        <td style="width:260px;"><strong>${escapeHtml(fieldName)}</strong></td>
+        <td style="width:260px;"><strong>${escapeHtml(displayFieldName)}</strong></td>
         <td>${rendered}</td>
       </tr>
     `;
@@ -416,6 +432,82 @@ viewerBackdrop.addEventListener("click", (e) => {
     document.body.appendChild(a);
     a.click();
     a.remove();
+    return;
+  }
+
+  if (e.target.closest(".carton-in-submit")) {
+    const btn = e.target.closest(".carton-in-submit");
+    const recordId = btn.dataset.recordId;
+    const input = viewerBody.querySelector(`.carton-in-input[data-record-id="${recordId}"]`);
+    if (!input) return;
+
+    const val = input.value.trim();
+    if (val === "" || isNaN(Number(val)) || Number(val) < 0) {
+      alert("Please enter a valid number for Carton IN.");
+      return;
+    }
+
+    btn.disabled = true;
+    btn.textContent = "Saving…";
+    setError("");
+
+    fetch("/api/order-cartons", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id: recordId, cartonIn: Number(val) }),
+    })
+      .then(async (r) => {
+        if (!r.ok) throw new Error(await r.text());
+        btn.textContent = "Saved ✓";
+        setTimeout(() => { btn.textContent = "Save"; }, 1500);
+        await load();
+      })
+      .catch((err) => {
+        setError(err?.message || String(err));
+        alert("Failed to save Carton IN. See error above.");
+        btn.textContent = "Save";
+      })
+      .finally(() => {
+        btn.disabled = false;
+      });
+    return;
+  }
+
+  if (e.target.closest(".cartons-out-submit")) {
+    const btn = e.target.closest(".cartons-out-submit");
+    const recordId = btn.dataset.recordId;
+    const input = viewerBody.querySelector(`.cartons-out-input[data-record-id="${recordId}"]`);
+    if (!input) return;
+
+    const val = input.value.trim();
+    if (val === "" || isNaN(Number(val)) || Number(val) < 0) {
+      alert("Please enter a valid number for Cartons Out.");
+      return;
+    }
+
+    btn.disabled = true;
+    btn.textContent = "Saving…";
+    setError("");
+
+    fetch("/api/order-cartons", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id: recordId, cartonsOut: Number(val) }),
+    })
+      .then(async (r) => {
+        if (!r.ok) throw new Error(await r.text());
+        btn.textContent = "Saved ✓";
+        setTimeout(() => { btn.textContent = "Save"; }, 1500);
+        await load();
+      })
+      .catch((err) => {
+        setError(err?.message || String(err));
+        alert("Failed to save Cartons Out. See error above.");
+        btn.textContent = "Save";
+      })
+      .finally(() => {
+        btn.disabled = false;
+      });
     return;
   }
 
