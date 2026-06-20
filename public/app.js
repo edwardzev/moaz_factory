@@ -193,6 +193,23 @@ function fmtScalar(v) {
   return escapeHtml(String(v));
 }
 
+function fmtDeadline(v) {
+  if (v === null || v === undefined || v === "") return `<span class="muted">—</span>`;
+  const raw = String(v);
+  const date = new Date(raw);
+  if (Number.isNaN(date.getTime())) return fmtScalar(v);
+
+  const formatted = new Intl.DateTimeFormat(undefined, {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(date);
+
+  return `<time datetime="${escapeHtml(raw)}" title="${escapeHtml(raw)}">${escapeHtml(formatted)}</time>`;
+}
+
 function readOnlyTextValue(v) {
   if (v === null || v === undefined) return "";
   if (Array.isArray(v)) return v.filter(item => item !== null && item !== undefined && item !== "").join(", ");
@@ -392,6 +409,8 @@ function openOrderModal(row) {
     } else if (fieldName === "Method") {
       const m = displayMethod(v);
       rendered = m.trim() ? escapeHtml(m) : `<span class="muted">—</span>`;
+    } else if (fieldName === "Deadline") {
+      rendered = fmtDeadline(v);
     } else if (READ_ONLY_TEXT_FIELDS.has(fieldName)) {
       rendered = readOnlyTextField(v);
     } else if (isAirtableAttachmentArray(v)) {
