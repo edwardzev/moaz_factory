@@ -62,6 +62,15 @@ const READ_ONLY_TEXT_FIELDS = new Set([
   "products to buy",
 ]);
 
+const MATERIAL_ONLY_CARD_LABELS = new Map([
+  ["לא, אני צריך רק חומרים", "Material only"],
+  ["לא אני צריך רק חומרים", "Material only"],
+  ["כן, אני רוצה שתדפיסו לי על סחורה", "Material+press"],
+  ["כן אני רוצה שתדפיסו לי על סחורה", "Material+press"],
+  ["כן, אני רוצה שתדפיסו לי על הסחורה", "Material+press"],
+  ["כן אני רוצה שתדפיסו לי על הסחורה", "Material+press"],
+]);
+
 const GROUP_ORDER = [
   "outsource north",
   "prepared to send north",
@@ -101,6 +110,12 @@ function displayMethod(method) {
   const m = String(method ?? "").trim().toLowerCase();
   if (m === "press" || m === "cutting to pieces") return "";
   return String(method ?? "");
+}
+
+function displayMaterialOnlyCardValue(value) {
+  const text = String(value ?? "").trim();
+  if (!text) return "";
+  return MATERIAL_ONLY_CARD_LABELS.get(text) || text;
 }
 
 function normStatus(s) {
@@ -720,7 +735,7 @@ function renderKanban(rows) {
         <dt>Manager</dt>
         <dd>${escapeHtml(row.manager ?? "")}</dd>
         <dt>Material only/Material+Press</dt>
-        <dd>${escapeHtml(row.materialOnlyPress ?? "")}</dd>
+        <dd>${escapeHtml(displayMaterialOnlyCardValue(row.materialOnlyPress))}</dd>
         <dt>Carton IN</dt>
         <dd>${escapeHtml(row.cartonIn ?? "")}</dd>
         <dt>Impressions</dt>
