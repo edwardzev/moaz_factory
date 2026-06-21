@@ -125,6 +125,11 @@ function displayMaterialOnlyCardValue(value) {
   return MATERIAL_ONLY_CARD_LABELS.get(text) || text;
 }
 
+function displayCardTextValue(value) {
+  const text = readOnlyTextValue(value).trim();
+  return text ? escapeHtml(text) : `<span class="muted">—</span>`;
+}
+
 function normStatus(s) {
   return String(s ?? "")
     .trim()
@@ -796,13 +801,13 @@ function renderKanban(rows) {
         ${displayMethod(row.method).trim() ? `<span class="pill">${escapeHtml(displayMethod(row.method))}</span>` : ""}
       </div>
       <div class="kanban-title">${escapeHtml(row.jobName ?? "")}</div>
+      <div class="kanban-card-identity">
+        <div class="kanban-label">Client</div>
+        <div class="kanban-value">${displayCardTextValue(row.clientNameText)}</div>
+        <div class="kanban-manager">Manager - ${displayCardTextValue(row.manager)}</div>
+        <div class="kanban-material">${displayCardTextValue(displayMaterialOnlyCardValue(row.materialOnlyPress))}</div>
+      </div>
       <dl class="kanban-meta">
-        <dt>Client</dt>
-        <dd>${escapeHtml(row.clientNameText ?? "")}</dd>
-        <dt>Manager</dt>
-        <dd>${escapeHtml(row.manager ?? "")}</dd>
-        <dt>Material only/Material+Press</dt>
-        <dd>${escapeHtml(displayMaterialOnlyCardValue(row.materialOnlyPress))}</dd>
         <dt>Carton IN</dt>
         <dd>${escapeHtml(row.cartonIn ?? "")}</dd>
         <dt>Impressions</dt>
