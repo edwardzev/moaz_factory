@@ -344,9 +344,28 @@
       gap: 12px;
       align-items: stretch;
       overflow-x: auto;
-      overflow-y: visible;
-      padding-bottom: 12px;
+      overflow-y: hidden;
+      height: calc(100vh - 150px);
+      min-height: 420px;
+      padding-bottom: 16px;
       scrollbar-gutter: stable;
+      scrollbar-color: #6b7280 #e5e7eb;
+      scrollbar-width: auto;
+    }
+
+    .kanban::-webkit-scrollbar {
+      height: 16px;
+    }
+
+    .kanban::-webkit-scrollbar-track {
+      background: #e5e7eb;
+      border-radius: 999px;
+    }
+
+    .kanban::-webkit-scrollbar-thumb {
+      background: #6b7280;
+      border: 3px solid #e5e7eb;
+      border-radius: 999px;
     }
 
     .kanban[hidden] {
@@ -384,6 +403,8 @@
       align-content: start;
       flex: 1;
       gap: 10px;
+      min-height: 0;
+      overflow-y: auto;
       padding: 10px;
     }
 
