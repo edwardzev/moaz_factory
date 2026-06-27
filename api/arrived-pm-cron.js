@@ -56,6 +56,7 @@ async function updateArrivedToPm(headers, records) {
       id: record.id,
       fields: {
         "Outsource North": OUTSOURCE_ARRIVED_TO_PM,
+        "Ready for ship": true,
       },
     }));
 

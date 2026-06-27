@@ -40,6 +40,12 @@ const IN_WORK_PRINTER_NUMBER_VALUES = new Set([
   "UV DTF",
 ]);
 
+const IN_PRINTER_PRINTER_NUMBER_VALUES = new Set([
+  "BIG MAMA",
+  "Sublimation",
+  "UV DTF",
+]);
+
 const MATERIAL_ONLY_VALUES = new Set([
   "Material only",
   "לא, אני צריך רק חומרים",
@@ -181,6 +187,12 @@ export default async function handler(req, res) {
   const outsourceNorth = nextOutsourceNorthForPrinterNumber(value, recordContext);
   if (outsourceNorth) {
     fields["Outsource North"] = outsourceNorth;
+  }
+  if (IN_PRINTER_PRINTER_NUMBER_VALUES.has(value)) {
+    fields["In printer"] = true;
+  }
+  if (value === "Printed Material North" && materialPathFor(recordContext.materialOnly) === "material-press") {
+    fields["Out of printer"] = true;
   }
 
   const patchRes = await fetch(recordUrl, {
