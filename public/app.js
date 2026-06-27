@@ -951,6 +951,9 @@ async function moveKanbanCard(recordId, printerNumber) {
 
     if (!r.ok) throw new Error(await r.text());
     const result = await r.json().catch(() => ({}));
+    if (result?.outsourceNorth) {
+      row.outsourceNorth = result.outsourceNorth;
+    }
     await load();
 
     if (result?.webhook && result.webhook.ok === false) {

@@ -22,8 +22,19 @@ const PRINTER_NUMBER_VALUES = new Set([
 const PRINTER_NUMBER_ALIASES = new Map([
   ["Delivered Outsource", "Delivered outsource"],
   ["Unclear", "unclear"],
+  ["Big DTF", "BIG MAMA"],
   ["Big mama", "BIG MAMA"],
   ["Printed material north", "Printed Material North"],
+]);
+
+const OUTSOURCE_NORTH_BY_PRINTER_NUMBER = new Map([
+  ["Delivered outsource", "Delivered to North"],
+  ["PRT ready", "In work North"],
+  ["Sample", "In work North"],
+  ["Sample Approved", "In work North"],
+  ["BIG MAMA", "In work North"],
+  ["Sublimation", "In work North"],
+  ["UV DTF", "In work North"],
 ]);
 
 function normalizePrinterNumber(value) {
@@ -75,6 +86,13 @@ export default async function handler(req, res) {
   }
 
   const recordUrl = `https://api.airtable.com/v0/${BASE_ID}/${TABLE_ID}/${recordId}`;
+  const fields = {
+    "Printer number": value || null,
+  };
+  const outsourceNorth = OUTSOURCE_NORTH_BY_PRINTER_NUMBER.get(value) || null;
+  if (outsourceNorth) {
+    fields["Outsource North"] = outsourceNorth;
+  }
 
   const patchRes = await fetch(recordUrl, {
     method: "PATCH",
@@ -82,11 +100,7 @@ export default async function handler(req, res) {
       Authorization: `Bearer ${process.env.AIRTABLE_TOKEN}`,
       "Content-Type": "application/json",
     },
-    body: JSON.stringify({
-      fields: {
-        "Printer number": value || null,
-      },
-    }),
+    body: JSON.stringify({ fields }),
   });
 
   const text = await patchRes.text();
@@ -107,5 +121,5 @@ export default async function handler(req, res) {
     }
   }
 
-  res.status(200).json({ ok: true, printerNumber: value, webhook });
+  res.status(200).json({ ok: true, printerNumber: value, outsourceNorth, webhook });
 }
