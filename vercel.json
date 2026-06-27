@@ -1,4 +1,11 @@
 {
+  "$schema": "https://openapi.vercel.sh/vercel.json",
   "buildCommand": null,
-  "framework": null
+  "framework": null,
+  "crons": [
+    {
+      "path": "/api/arrived-pm-cron",
+      "schedule": "*/5 * * * *"
+    }
+  ]
 }

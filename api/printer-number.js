@@ -1,6 +1,10 @@
 const BASE_ID = "appgJ2DCTbxQLzK2S";
 const TABLE_ID = "tbloqSi9cbJUSa5JV";
 const TRUCK_LEFT_VALUE = "Truck left";
+const OUTSOURCE_DELIVERED_NORTH = "Delivered to North";
+const OUTSOURCE_IN_WORK_NORTH = "In work North";
+const OUTSOURCE_FINISHED_NORTH = "Finished North";
+const OUTSOURCE_ARRIVED_TO_PM = "Arrived to PM";
 
 const PRINTER_NUMBER_VALUES = new Set([
   "",
@@ -27,14 +31,28 @@ const PRINTER_NUMBER_ALIASES = new Map([
   ["Printed material north", "Printed Material North"],
 ]);
 
-const OUTSOURCE_NORTH_BY_PRINTER_NUMBER = new Map([
-  ["Delivered outsource", "Delivered to North"],
-  ["PRT ready", "In work North"],
-  ["Sample", "In work North"],
-  ["Sample Approved", "In work North"],
-  ["BIG MAMA", "In work North"],
-  ["Sublimation", "In work North"],
-  ["UV DTF", "In work North"],
+const IN_WORK_PRINTER_NUMBER_VALUES = new Set([
+  "PRT ready",
+  "Sample",
+  "Sample Approved",
+  "BIG MAMA",
+  "Sublimation",
+  "UV DTF",
+]);
+
+const MATERIAL_ONLY_VALUES = new Set([
+  "Material only",
+  "לא, אני צריך רק חומרים",
+  "לא אני צריך רק חומרים",
+]);
+
+const MATERIAL_PRESS_VALUES = new Set([
+  "Material+press",
+  "Material + press",
+  "כן, אני רוצה שתדפיסו לי על סחורה",
+  "כן אני רוצה שתדפיסו לי על סחורה",
+  "כן, אני רוצה שתדפיסו לי על הסחורה",
+  "כן אני רוצה שתדפיסו לי על הסחורה",
 ]);
 
 function normalizePrinterNumber(value) {
@@ -42,6 +60,68 @@ function normalizePrinterNumber(value) {
     ? ""
     : String(value).trim();
   return PRINTER_NUMBER_ALIASES.get(text) || text;
+}
+
+function normalizeText(value) {
+  return String(value ?? "").trim().replace(/\s+/g, " ");
+}
+
+function textEquals(a, b) {
+  return normalizeText(a).toLowerCase() === normalizeText(b).toLowerCase();
+}
+
+function materialPathFor(value) {
+  const text = normalizeText(value);
+  if (MATERIAL_ONLY_VALUES.has(text)) return "material-only";
+  if (MATERIAL_PRESS_VALUES.has(text)) return "material-press";
+  return "unknown";
+}
+
+function needsRecordContext(printerNumber) {
+  return printerNumber === "Printed Material North"
+    || printerNumber === "Press Finished"
+    || printerNumber === TRUCK_LEFT_VALUE;
+}
+
+async function fetchRecordContext(recordUrl) {
+  const response = await fetch(recordUrl, {
+    headers: {
+      Authorization: `Bearer ${process.env.AIRTABLE_TOKEN}`,
+    },
+  });
+  const text = await response.text();
+
+  if (!response.ok) {
+    const error = new Error(text);
+    error.status = response.status;
+    throw error;
+  }
+
+  const data = JSON.parse(text);
+  return {
+    materialOnly: data.fields?.["Material only"] ?? "",
+    outsourceNorth: data.fields?.["Outsource North"] ?? "",
+  };
+}
+
+function nextOutsourceNorthForPrinterNumber(printerNumber, context = {}) {
+  if (printerNumber === "Delivered outsource") return OUTSOURCE_DELIVERED_NORTH;
+  if (IN_WORK_PRINTER_NUMBER_VALUES.has(printerNumber)) return OUTSOURCE_IN_WORK_NORTH;
+
+  const materialPath = materialPathFor(context.materialOnly);
+  if (printerNumber === "Printed Material North" && materialPath === "material-only") {
+    return OUTSOURCE_FINISHED_NORTH;
+  }
+  if (printerNumber === "Press Finished" && materialPath === "material-press") {
+    return OUTSOURCE_FINISHED_NORTH;
+  }
+  if (printerNumber === TRUCK_LEFT_VALUE) {
+    if (textEquals(context.outsourceNorth, OUTSOURCE_FINISHED_NORTH)) return null;
+    if (textEquals(context.outsourceNorth, OUTSOURCE_ARRIVED_TO_PM)) return null;
+    return OUTSOURCE_FINISHED_NORTH;
+  }
+
+  return null;
 }
 
 async function sendTruckLeftWebhook(recordId) {
@@ -86,10 +166,19 @@ export default async function handler(req, res) {
   }
 
   const recordUrl = `https://api.airtable.com/v0/${BASE_ID}/${TABLE_ID}/${recordId}`;
+  let recordContext = {};
+  if (needsRecordContext(value)) {
+    try {
+      recordContext = await fetchRecordContext(recordUrl);
+    } catch (err) {
+      return res.status(err?.status || 500).json({ error: err?.message || String(err) });
+    }
+  }
+
   const fields = {
     "Printer number": value || null,
   };
-  const outsourceNorth = OUTSOURCE_NORTH_BY_PRINTER_NUMBER.get(value) || null;
+  const outsourceNorth = nextOutsourceNorthForPrinterNumber(value, recordContext);
   if (outsourceNorth) {
     fields["Outsource North"] = outsourceNorth;
   }
