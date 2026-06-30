@@ -2,6 +2,7 @@ const BASE_ID  = "appgJ2DCTbxQLzK2S";
 const TABLE_ID = "tbloqSi9cbJUSa5JV";
 const OUTSOURCE_NORTH_VIEW_ID = "viwRkYqu8uDdjkNK0";
 const PRIORITY_VIEW_NAME = "Priority";
+const MAIN_FLOW_VIEW_NAME = "Main Flow";
 const OUTSOURCE_NORTH_NOT_EMPTY_FORMULA = "LEN({Outsource North} & '') > 0";
 const AIRTABLE_LOCALE_PARAMS = {
   cellFormat: "string",
@@ -68,8 +69,8 @@ export default async function handler(req, res) {
   const requestedView = String(requestUrl.searchParams.get("view") || "").trim().toLowerCase();
   const airtableParams = new URLSearchParams();
 
-  if (requestedView === "priority") {
-    airtableParams.set("view", PRIORITY_VIEW_NAME);
+  if (requestedView === "priority" || requestedView === "main-flow") {
+    airtableParams.set("view", requestedView === "main-flow" ? MAIN_FLOW_VIEW_NAME : PRIORITY_VIEW_NAME);
     airtableParams.set("filterByFormula", OUTSOURCE_NORTH_NOT_EMPTY_FORMULA);
   } else {
     airtableParams.set("view", OUTSOURCE_NORTH_VIEW_ID);
@@ -103,6 +104,21 @@ export default async function handler(req, res) {
         jobName: rec.fields["Job Name"] ?? "",
         outsourceNorth: rec.fields["Outsource North"] ?? "",
         printerNumber: rec.fields["Printer number"] ?? "",
+        printer: rec.fields["Printer"] ?? "",
+        status: rec.fields["Status"] ?? "",
+        productsOrdered: rec.fields["Products Ordered"] ?? false,
+        productsIn: rec.fields["Products IN"] ?? false,
+        sendToPrint: rec.fields["Send to print"] ?? false,
+        prtFileReady: rec.fields["PRT File Ready"] ?? false,
+        paymentStatus: rec.fields["Payment status"] ?? "",
+        sampleNeeded: rec.fields["Sample needed"] ?? false,
+        sampleApprovedByClient: rec.fields["Sample approved by client"] ?? false,
+        sampleStatus: rec.fields["Sample status"] ?? "",
+        inPrinter: rec.fields["In printer"] ?? false,
+        outOfPrinter: rec.fields["Out of printer"] ?? false,
+        pressStarted: rec.fields["Press started"] ?? false,
+        pressFinished: rec.fields["Press finished"] ?? false,
+        readyForShip: rec.fields["Ready for ship"] ?? false,
         manager: managerText || scalarText(managerFallback),
         materialOnlyPress: rec.fields["Material only"] ?? "",
         // Airtable attachment field: array of { id, url, filename, type, thumbnails, ... }

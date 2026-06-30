@@ -7,6 +7,7 @@ const jobsTable = document.getElementById("jobsTable");
 const kanbanEl = document.getElementById("kanban");
 const listViewBtn = document.getElementById("listViewBtn");
 const kanbanViewBtn = document.getElementById("kanbanViewBtn");
+const mainFlowViewBtn = document.getElementById("mainFlowViewBtn");
 
 const viewerBackdrop = document.getElementById("viewerBackdrop");
 const viewerTitle = document.getElementById("viewerTitle");
@@ -24,6 +25,12 @@ const VIEW_MODES = {
   kanban: {
     label: "Priority kanban",
     endpoint: "/api/jobs?view=priority",
+    kanban: true,
+  },
+  mainFlow: {
+    label: "Main flow",
+    endpoint: "/api/jobs?view=main-flow",
+    kanban: true,
   },
 };
 
@@ -110,6 +117,34 @@ for (const column of PRIORITY_COLUMNS) {
   }
 }
 
+const MAIN_FLOW_COLUMNS = [
+  { key: "incoming", values: ["", "Go North", "Uncategorized"], writeValue: "Go North", label: "Incoming" },
+  { key: "delivered-to-factory", values: ["Delivered outsource", "Delivered Outsource"], writeValue: "Delivered outsource", label: "Delivered to factory" },
+  { key: "prt-ready", values: ["PRT ready"], writeValue: "PRT ready", label: "prt ready" },
+  { key: "wait-for-payment", values: [], writeValue: null, label: "wait for payment" },
+  { key: "sample", values: ["Sample"], writeValue: "Sample", label: "sample" },
+  { key: "sample-approved", values: ["Sample Approved"], writeValue: "Sample Approved", label: "sample approved" },
+  { key: "dtf", values: ["BIG MAMA", "Big mama"], writeValue: "BIG MAMA", label: "DTF" },
+  { key: "uvdtf", values: ["UV DTF"], writeValue: "UV DTF", label: "UVDTF" },
+  { key: "sublimation", values: ["Sublimation"], writeValue: "Sublimation", label: "Sublimation" },
+  { key: "material-printed", values: ["Printed Material North", "Printed material north"], writeValue: "Printed Material North", label: "Material printed" },
+  { key: "press-started", values: ["Press Started"], writeValue: "Press Started", label: "Press started" },
+  { key: "press-finished", values: ["Press Finished"], writeValue: "Press Finished", label: "Press finished" },
+  { key: "truck-left", values: ["Truck left"], writeValue: "Truck left", label: "truck left" },
+];
+
+const MAIN_FLOW_COLUMN_BY_VALUE = new Map();
+for (const column of MAIN_FLOW_COLUMNS) {
+  for (const value of column.values) {
+    MAIN_FLOW_COLUMN_BY_VALUE.set(value, column);
+  }
+}
+
+const KANBAN_VIEW_COLUMNS = {
+  kanban: PRIORITY_COLUMNS,
+  mainFlow: MAIN_FLOW_COLUMNS,
+};
+
 let draggedKanbanId = null;
 let pointerDragState = null;
 
@@ -156,6 +191,51 @@ function statusKey(s) {
 
 function priorityColumnForValue(value) {
   return PRIORITY_COLUMN_BY_VALUE.get(String(value ?? "").trim()) || null;
+}
+
+function isChecked(value) {
+  if (value === true) return true;
+  const text = normStatus(value);
+  return text === "checked" || text === "true" || text === "yes";
+}
+
+function includesSelectValue(value, expected) {
+  const expectedKey = normStatus(expected);
+  if (Array.isArray(value)) return value.some((item) => normStatus(item?.name ?? item) === expectedKey);
+  return String(value ?? "")
+    .split(",")
+    .some((item) => normStatus(item) === expectedKey);
+}
+
+function columnsForCurrentKanban() {
+  return KANBAN_VIEW_COLUMNS[currentView] || PRIORITY_COLUMNS;
+}
+
+function mainFlowColumnForRow(row) {
+  const printerNumber = String(row.printerNumber ?? "").trim();
+  const status = normStatus(row.status);
+  const outsourceNorth = normStatus(row.outsourceNorth);
+  const directColumn = MAIN_FLOW_COLUMN_BY_VALUE.get(printerNumber);
+
+  if (directColumn?.key === "truck-left" || status === "waiting for shipping") return MAIN_FLOW_COLUMNS[12];
+  if (directColumn?.key === "press-finished" || isChecked(row.pressFinished) || status === "press finished") return MAIN_FLOW_COLUMNS[11];
+  if (directColumn?.key === "press-started" || isChecked(row.pressStarted) || status === "waiting for press") return MAIN_FLOW_COLUMNS[10];
+  if (directColumn?.key === "material-printed" || isChecked(row.outOfPrinter) || status === "material printed") return MAIN_FLOW_COLUMNS[9];
+  if (directColumn?.key === "dtf" || isChecked(row.inPrinter) && normStatus(row.printer) === "big mama") return MAIN_FLOW_COLUMNS[6];
+  if (directColumn?.key === "uvdtf") return MAIN_FLOW_COLUMNS[7];
+  if (directColumn?.key === "sublimation") return MAIN_FLOW_COLUMNS[8];
+  if (directColumn?.key === "sample-approved" || isChecked(row.sampleApprovedByClient) || status === "sample approved") return MAIN_FLOW_COLUMNS[5];
+  if (directColumn?.key === "sample") return MAIN_FLOW_COLUMNS[4];
+  if (includesSelectValue(row.paymentStatus, "invoiced") && !includesSelectValue(row.paymentStatus, "paid")) return MAIN_FLOW_COLUMNS[3];
+  if (directColumn?.key === "prt-ready" || isChecked(row.prtFileReady) || status === "waiting to print") return MAIN_FLOW_COLUMNS[2];
+  if (directColumn?.key === "delivered-to-factory" || outsourceNorth === "delivered to north") return MAIN_FLOW_COLUMNS[1];
+
+  return MAIN_FLOW_COLUMNS[0];
+}
+
+function columnForRow(row) {
+  if (currentView === "mainFlow") return mainFlowColumnForRow(row);
+  return priorityColumnForValue(row.printerNumber);
 }
 
 function groupWeightFor(key) {
@@ -782,13 +862,14 @@ function renderTable(rows) {
 }
 
 function renderKanban(rows) {
+  const columns = columnsForCurrentKanban();
   const groups = new Map();
-  for (const column of PRIORITY_COLUMNS) {
+  for (const column of columns) {
     groups.set(column.key, []);
   }
 
   for (const row of rows) {
-    const column = priorityColumnForValue(row.printerNumber);
+    const column = columnForRow(row);
     if (!column) continue;
     groups.get(column.key).push(row);
   }
@@ -819,12 +900,15 @@ function renderKanban(rows) {
     </article>
   `;
 
-  kanbanEl.innerHTML = PRIORITY_COLUMNS
+  kanbanEl.innerHTML = columns
     .map((column) => {
       const groupRows = groups.get(column.key) || [];
       const slug = slugifyGroup(column.label);
+      const writeAttr = column.writeValue === null || column.writeValue === undefined
+        ? ""
+        : ` data-printer-value="${escapeHtml(column.writeValue)}"`;
       return `
-        <section class="kanban-column group-${escapeHtml(slug)}" data-printer-value="${escapeHtml(column.writeValue)}">
+        <section class="kanban-column group-${escapeHtml(slug)}"${writeAttr}>
           <div class="kanban-column-header">
             <span>${escapeHtml(column.label)}</span>
             <span class="pill">${groupRows.length}</span>
@@ -839,7 +923,7 @@ function renderKanban(rows) {
 }
 
 function render(rows) {
-  if (currentView === "kanban") {
+  if (VIEW_MODES[currentView]?.kanban) {
     renderKanban(rows);
     return;
   }
@@ -884,13 +968,13 @@ async function load() {
       throw new Error(`GET ${viewConfig.endpoint} failed (${r.status})\n${t}`);
     }
     const data = await r.json();
-    allRows = currentView === "kanban" ? data : sortListRows(data);
+    allRows = VIEW_MODES[currentView]?.kanban ? data : sortListRows(data);
     applyFilter();
     setStatus(`Loaded ${allRows.length} records`);
   } catch (e) {
     setStatus("Error");
     setError(e?.message || String(e));
-    if (currentView === "kanban") {
+    if (VIEW_MODES[currentView]?.kanban) {
       kanbanEl.innerHTML = `<div class="muted">Failed to load</div>`;
     } else {
       tbody.innerHTML = `<tr><td colspan="12" class="muted">Failed to load</td></tr>`;
@@ -906,7 +990,7 @@ function setView(nextView) {
   setError("");
   searchEl.value = "";
 
-  const isKanban = currentView === "kanban";
+  const isKanban = Boolean(VIEW_MODES[currentView]?.kanban);
   jobsTable.hidden = isKanban;
   kanbanEl.hidden = !isKanban;
   tbody.innerHTML = `<tr><td colspan="12" class="muted">Loading…</td></tr>`;
@@ -914,8 +998,10 @@ function setView(nextView) {
 
   listViewBtn.classList.toggle("active", !isKanban);
   listViewBtn.setAttribute("aria-selected", String(!isKanban));
-  kanbanViewBtn.classList.toggle("active", isKanban);
-  kanbanViewBtn.setAttribute("aria-selected", String(isKanban));
+  kanbanViewBtn.classList.toggle("active", currentView === "kanban");
+  kanbanViewBtn.setAttribute("aria-selected", String(currentView === "kanban"));
+  mainFlowViewBtn.classList.toggle("active", currentView === "mainFlow");
+  mainFlowViewBtn.setAttribute("aria-selected", String(currentView === "mainFlow"));
 
   load();
 }
@@ -933,12 +1019,12 @@ async function moveKanbanCard(recordId, printerNumber) {
 
   const currentValue = String(row.printerNumber ?? "").trim();
   const nextValue = String(printerNumber ?? "").trim();
-  const currentColumn = priorityColumnForValue(currentValue);
-  const nextColumn = priorityColumnForValue(nextValue);
+  const currentColumn = columnForRow(row);
+  const nextColumn = columnsForCurrentKanban().find((column) => column.writeValue === nextValue) || null;
   if (currentValue === nextValue || (currentColumn && currentColumn === nextColumn)) return;
 
   setError("");
-  setStatus("Saving Priority column…");
+  setStatus(`Saving ${VIEW_MODES[currentView]?.label || "kanban"} column…`);
   row.printerNumber = nextValue;
   applyFilter();
 
@@ -967,7 +1053,7 @@ async function moveKanbanCard(recordId, printerNumber) {
     applyFilter();
     setStatus("Error");
     setError(err?.message || String(err));
-    alert("Priority column update failed. See error above.");
+    alert("Kanban column update failed. See error above.");
   }
 }
 
@@ -1023,6 +1109,10 @@ function cleanupPointerDrag({ shouldMove = false, clientX = 0, clientY = 0 } = {
 
   const column = state.overColumn || columnAtPoint(clientX, clientY);
   if (!column) return;
+  if (!column.dataset.printerValue) {
+    alert("This Main flow column is read-only for dragging.");
+    return;
+  }
 
   moveKanbanCard(state.recordId, column.dataset.printerValue || "");
 }
@@ -1244,6 +1334,10 @@ kanbanEl.addEventListener("drop", (e) => {
   column.classList.remove("drag-over");
   const recordId = e.dataTransfer.getData("text/plain") || draggedKanbanId;
   if (!recordId) return;
+  if (!column.dataset.printerValue) {
+    alert("This Main flow column is read-only for dragging.");
+    return;
+  }
 
   moveKanbanCard(recordId, column.dataset.printerValue || "");
 });
@@ -1251,6 +1345,7 @@ searchEl.addEventListener("input", applyFilter);
 refreshBtn.addEventListener("click", load);
 listViewBtn.addEventListener("click", () => setView("list"));
 kanbanViewBtn.addEventListener("click", () => setView("kanban"));
+mainFlowViewBtn.addEventListener("click", () => setView("mainFlow"));
 
 // Init
 load();
