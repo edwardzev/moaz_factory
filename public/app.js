@@ -6,7 +6,6 @@ const refreshBtn = document.getElementById("refreshBtn");
 const jobsTable = document.getElementById("jobsTable");
 const kanbanEl = document.getElementById("kanban");
 const listViewBtn = document.getElementById("listViewBtn");
-const kanbanViewBtn = document.getElementById("kanbanViewBtn");
 const mainFlowViewBtn = document.getElementById("mainFlowViewBtn");
 const mainFlowActions = document.getElementById("mainFlowActions");
 const putMetersBtn = document.getElementById("putMetersBtn");
@@ -25,14 +24,6 @@ const VIEW_MODES = {
   list: {
     label: "Full list",
     endpoint: "/api/jobs",
-  },
-  kanban: {
-    label: "Priority kanban",
-    endpoint: "/api/jobs?view=priority",
-    kanban: true,
-    updateEndpoint: "/api/printer-number",
-    valueField: "printerNumber",
-    bodyField: "printerNumber",
   },
   mainFlow: {
     label: "Main flow",
@@ -136,6 +127,7 @@ const MAIN_FLOW_COLUMNS = [
   { key: "incoming", values: ["", "Go North", "Products ordered", "Products IN", "Ready to send to factory"], writeValue: "Go North", label: "Incoming" },
   { key: "incoming-material-only", values: [], writeValue: null, label: "Incoming Material only" },
   { key: "delivered-to-factory", values: ["Delivered to factory"], writeValue: "Delivered to factory", label: "Delivered to factory" },
+  { key: "unclear", values: ["Unclear"], writeValue: "Unclear", label: "Unclear" },
   { key: "prt-ready", values: ["PRT Ready"], writeValue: "PRT Ready", label: "prt ready" },
   { key: "sample", values: ["Sample"], writeValue: "Sample", label: "sample" },
   { key: "sample-approved", values: ["Sample Approved"], writeValue: "Sample Approved", label: "sample approved" },
@@ -1155,8 +1147,6 @@ function setView(nextView) {
 
   listViewBtn.classList.toggle("active", !isKanban);
   listViewBtn.setAttribute("aria-selected", String(!isKanban));
-  kanbanViewBtn.classList.toggle("active", currentView === "kanban");
-  kanbanViewBtn.setAttribute("aria-selected", String(currentView === "kanban"));
   mainFlowViewBtn.classList.toggle("active", currentView === "mainFlow");
   mainFlowViewBtn.setAttribute("aria-selected", String(currentView === "mainFlow"));
 
@@ -1174,7 +1164,7 @@ async function moveKanbanCard(recordId, nextKanbanValue) {
   const row = allRows.find(r => r.id === recordId);
   if (!row) return;
 
-  const viewConfig = VIEW_MODES[currentView] || VIEW_MODES.kanban;
+  const viewConfig = VIEW_MODES[currentView] || VIEW_MODES.mainFlow;
   const valueField = viewConfig.valueField || "printerNumber";
   const bodyField = viewConfig.bodyField || valueField;
   const updateEndpoint = viewConfig.updateEndpoint || "/api/printer-number";
@@ -1205,13 +1195,6 @@ async function moveKanbanCard(recordId, nextKanbanValue) {
       row[valueField] = result[valueField];
     }
     await load();
-
-    if (result?.webhook && result.webhook.ok === false) {
-      const status = result.webhook.status ? ` (${result.webhook.status})` : "";
-      const detail = result.webhook.error || result.webhook.response || "Unknown webhook error";
-      setError(`Truck left webhook failed${status}\n${detail}`);
-      alert("Truck left saved, but webhook failed. See error above.");
-    }
   } catch (err) {
     row[valueField] = currentValue;
     applyFilter();
@@ -1564,7 +1547,6 @@ kanbanEl.addEventListener("drop", (e) => {
 searchEl.addEventListener("input", applyFilter);
 refreshBtn.addEventListener("click", load);
 listViewBtn.addEventListener("click", () => setView("list"));
-kanbanViewBtn.addEventListener("click", () => setView("kanban"));
 mainFlowViewBtn.addEventListener("click", () => setView("mainFlow"));
 putMetersBtn.addEventListener("click", openPutMetersModal);
 
