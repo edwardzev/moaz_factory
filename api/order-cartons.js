@@ -31,7 +31,7 @@ export default async function handler(req, res) {
       fields["Carton IN"] = parseNonNegativeNumber(cartonIn, "Carton IN");
     }
     if (cartonsOut !== undefined) {
-      fields["# of packages"] = parseNonNegativeNumber(cartonsOut, "Cartons Out");
+      fields["# of packages"] = parseNonNegativeNumber(cartonsOut, "Carton OUT");
     }
   } catch (err) {
     return res.status(400).json({ error: err.message });

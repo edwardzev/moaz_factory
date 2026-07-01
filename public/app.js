@@ -8,6 +8,9 @@ const kanbanEl = document.getElementById("kanban");
 const listViewBtn = document.getElementById("listViewBtn");
 const kanbanViewBtn = document.getElementById("kanbanViewBtn");
 const mainFlowViewBtn = document.getElementById("mainFlowViewBtn");
+const mainFlowActions = document.getElementById("mainFlowActions");
+const putMetersBtn = document.getElementById("putMetersBtn");
+const putMetersBadge = document.getElementById("putMetersBadge");
 
 const viewerBackdrop = document.getElementById("viewerBackdrop");
 const viewerTitle = document.getElementById("viewerTitle");
@@ -16,6 +19,7 @@ const viewerClose = document.getElementById("viewerClose");
 
 let allRows = [];
 let currentView = "list";
+let putMetersRows = [];
 
 const VIEW_MODES = {
   list: {
@@ -26,11 +30,17 @@ const VIEW_MODES = {
     label: "Priority kanban",
     endpoint: "/api/jobs?view=priority",
     kanban: true,
+    updateEndpoint: "/api/printer-number",
+    valueField: "printerNumber",
+    bodyField: "printerNumber",
   },
   mainFlow: {
     label: "Main flow",
     endpoint: "/api/jobs?view=main-flow",
     kanban: true,
+    updateEndpoint: "/api/main-flow",
+    valueField: "mainFlow",
+    bodyField: "mainFlow",
   },
 };
 
@@ -84,6 +94,11 @@ const MATERIAL_ONLY_CARD_LABELS = new Map([
   ["כן, אני רוצה שתדפיסו לי על הסחורה", "Material+press"],
   ["כן אני רוצה שתדפיסו לי על הסחורה", "Material+press"],
 ]);
+const MATERIAL_ONLY_VALUES = new Set([
+  "Material only",
+  "לא, אני צריך רק חומרים",
+  "לא אני צריך רק חומרים",
+]);
 
 const GROUP_ORDER = [
   "outsource north",
@@ -118,16 +133,16 @@ for (const column of PRIORITY_COLUMNS) {
 }
 
 const MAIN_FLOW_COLUMNS = [
-  { key: "incoming", values: ["", "Go North", "Uncategorized"], writeValue: "Go North", label: "Incoming" },
-  { key: "delivered-to-factory", values: ["Delivered outsource", "Delivered Outsource"], writeValue: "Delivered outsource", label: "Delivered to factory" },
-  { key: "prt-ready", values: ["PRT ready"], writeValue: "PRT ready", label: "prt ready" },
-  { key: "wait-for-payment", values: [], writeValue: null, label: "wait for payment" },
+  { key: "incoming", values: ["", "Go North", "Products ordered", "Products IN", "Ready to send to factory"], writeValue: "Go North", label: "Incoming" },
+  { key: "incoming-material-only", values: [], writeValue: null, label: "Incoming Material only" },
+  { key: "delivered-to-factory", values: ["Delivered to factory"], writeValue: "Delivered to factory", label: "Delivered to factory" },
+  { key: "prt-ready", values: ["PRT Ready"], writeValue: "PRT Ready", label: "prt ready" },
   { key: "sample", values: ["Sample"], writeValue: "Sample", label: "sample" },
   { key: "sample-approved", values: ["Sample Approved"], writeValue: "Sample Approved", label: "sample approved" },
-  { key: "dtf", values: ["BIG MAMA", "Big mama"], writeValue: "BIG MAMA", label: "DTF" },
+  { key: "dtf", values: ["DTF"], writeValue: "DTF", label: "DTF" },
   { key: "uvdtf", values: ["UV DTF"], writeValue: "UV DTF", label: "UVDTF" },
   { key: "sublimation", values: ["Sublimation"], writeValue: "Sublimation", label: "Sublimation" },
-  { key: "material-printed", values: ["Printed Material North", "Printed material north"], writeValue: "Printed Material North", label: "Material printed" },
+  { key: "material-printed", values: ["Material Printed"], writeValue: "Material Printed", label: "Material printed" },
   { key: "press-started", values: ["Press Started"], writeValue: "Press Started", label: "Press started" },
   { key: "press-finished", values: ["Press Finished"], writeValue: "Press Finished", label: "Press finished" },
   { key: "truck-left", values: ["Truck left"], writeValue: "Truck left", label: "truck left" },
@@ -158,6 +173,10 @@ function displayMaterialOnlyCardValue(value) {
   const text = String(value ?? "").trim();
   if (!text) return "";
   return MATERIAL_ONLY_CARD_LABELS.get(text) || text;
+}
+
+function displayPutMetersMaterialOnlyValue(value) {
+  return isMaterialOnlyValue(value) ? "חומרים בלבד" : displayMaterialOnlyCardValue(value);
 }
 
 function displayCardTextValue(value) {
@@ -207,30 +226,21 @@ function includesSelectValue(value, expected) {
     .some((item) => normStatus(item) === expectedKey);
 }
 
+function isMaterialOnlyValue(value) {
+  return MATERIAL_ONLY_VALUES.has(String(value ?? "").trim());
+}
+
 function columnsForCurrentKanban() {
   return KANBAN_VIEW_COLUMNS[currentView] || PRIORITY_COLUMNS;
 }
 
 function mainFlowColumnForRow(row) {
-  const printerNumber = String(row.printerNumber ?? "").trim();
-  const status = normStatus(row.status);
-  const outsourceNorth = normStatus(row.outsourceNorth);
-  const directColumn = MAIN_FLOW_COLUMN_BY_VALUE.get(printerNumber);
-
-  if (directColumn?.key === "truck-left" || status === "waiting for shipping") return MAIN_FLOW_COLUMNS[12];
-  if (directColumn?.key === "press-finished" || isChecked(row.pressFinished) || status === "press finished") return MAIN_FLOW_COLUMNS[11];
-  if (directColumn?.key === "press-started" || isChecked(row.pressStarted) || status === "waiting for press") return MAIN_FLOW_COLUMNS[10];
-  if (directColumn?.key === "material-printed" || isChecked(row.outOfPrinter) || status === "material printed") return MAIN_FLOW_COLUMNS[9];
-  if (directColumn?.key === "dtf" || isChecked(row.inPrinter) && normStatus(row.printer) === "big mama") return MAIN_FLOW_COLUMNS[6];
-  if (directColumn?.key === "uvdtf") return MAIN_FLOW_COLUMNS[7];
-  if (directColumn?.key === "sublimation") return MAIN_FLOW_COLUMNS[8];
-  if (directColumn?.key === "sample-approved" || isChecked(row.sampleApprovedByClient) || status === "sample approved") return MAIN_FLOW_COLUMNS[5];
-  if (directColumn?.key === "sample") return MAIN_FLOW_COLUMNS[4];
-  if (includesSelectValue(row.paymentStatus, "invoiced") && !includesSelectValue(row.paymentStatus, "paid")) return MAIN_FLOW_COLUMNS[3];
-  if (directColumn?.key === "prt-ready" || isChecked(row.prtFileReady) || status === "waiting to print") return MAIN_FLOW_COLUMNS[2];
-  if (directColumn?.key === "delivered-to-factory" || outsourceNorth === "delivered to north") return MAIN_FLOW_COLUMNS[1];
-
-  return MAIN_FLOW_COLUMNS[0];
+  const column = MAIN_FLOW_COLUMN_BY_VALUE.get(String(row.mainFlow ?? "").trim()) || null;
+  if (!column) return null;
+  if (column.key === "incoming" && isMaterialOnlyValue(row.materialOnlyPress)) {
+    return MAIN_FLOW_COLUMNS.find((candidate) => candidate.key === "incoming-material-only") || column;
+  }
+  return column;
 }
 
 function columnForRow(row) {
@@ -470,6 +480,111 @@ function kanbanMockupsCell(mockups) {
     .join("");
 }
 
+function updatePutMetersBadge(count) {
+  putMetersBadge.textContent = String(Number.isFinite(Number(count)) ? Number(count) : 0);
+}
+
+async function fetchPutMetersRows() {
+  const response = await fetch("/api/put-meters-list", { cache: "no-store" });
+  if (!response.ok) throw new Error(await response.text());
+  const data = await response.json();
+  putMetersRows = Array.isArray(data?.rows) ? data.rows : [];
+  updatePutMetersBadge(data?.count ?? putMetersRows.length);
+  return putMetersRows;
+}
+
+async function refreshPutMetersBadge() {
+  try {
+    await fetchPutMetersRows();
+  } catch (err) {
+    putMetersBadge.textContent = "!";
+  }
+}
+
+function isPutMetersPopupOpen() {
+  return viewerBackdrop.style.display === "flex" && Boolean(viewerBody.querySelector("[data-put-meters-list]"));
+}
+
+function renderPutMetersList(rows) {
+  const list = Array.isArray(rows) ? rows : [];
+  const rowHtml = (row) => `
+    <article class="put-meters-row" data-id="${escapeHtml(row.id)}">
+      <div class="put-meters-row-head">
+        <span class="pill put-meters-job">${escapeHtml(row.jobId ?? "")}</span>
+        <span class="pill">${escapeHtml(displayPutMetersMaterialOnlyValue(row.materialOnlyPress))}</span>
+      </div>
+      <div class="put-meters-title">${escapeHtml(row.jobName ?? "")}</div>
+      <dl class="put-meters-meta">
+        <dt>Client</dt>
+        <dd>${displayCardTextValue(row.clientNameText)}</dd>
+        <dt>Outsource North</dt>
+        <dd>${displayCardTextValue(row.outsourceNorth)}</dd>
+        <dt>Meters</dt>
+        <dd><span class="muted">—</span></dd>
+      </dl>
+      <div class="put-meters-editor">
+        <input type="number" class="put-meters-input" data-record-id="${escapeHtml(row.id)}" step="any" />
+        <button type="button" class="put-meters-submit" data-record-id="${escapeHtml(row.id)}">Save</button>
+        <span class="muted">note: write x2 of actual meters.</span>
+      </div>
+    </article>
+  `;
+
+  viewerBody.innerHTML = `
+    <div class="put-meters-list" data-put-meters-list>
+      ${list.length ? list.map(rowHtml).join("") : '<div class="muted">No orders</div>'}
+    </div>
+  `;
+}
+
+async function refreshPutMetersPopup() {
+  viewerBody.innerHTML = `<div class="put-meters-list" data-put-meters-list><div class="muted">Loading…</div></div>`;
+  try {
+    const rows = await fetchPutMetersRows();
+    if (isPutMetersPopupOpen()) renderPutMetersList(rows);
+  } catch (err) {
+    viewerBody.innerHTML = `<div class="put-meters-list" data-put-meters-list><div class="error">${escapeHtml(err?.message || String(err))}</div></div>`;
+  }
+}
+
+function openPutMetersModal() {
+  viewerTitle.textContent = "Put meters";
+  viewerBody.innerHTML = `<div class="put-meters-list" data-put-meters-list><div class="muted">Loading…</div></div>`;
+  viewerBackdrop.style.display = "flex";
+  viewerBackdrop.setAttribute("aria-hidden", "false");
+  refreshPutMetersPopup();
+}
+
+function cartonFieldInputValue(value, fallbackValue = null) {
+  const resolved = value ?? fallbackValue;
+  return resolved === null || resolved === undefined ? "" : String(resolved);
+}
+
+function kanbanCartonEditor({ row, field, label, value, fallbackValue = null }) {
+  const current = cartonFieldInputValue(value, fallbackValue);
+  return `
+    <div class="kanban-carton-row">
+      <label class="kanban-carton-label" for="kanban-${escapeHtml(field)}-${escapeHtml(row.id)}">${escapeHtml(label)}</label>
+      <input
+        id="kanban-${escapeHtml(field)}-${escapeHtml(row.id)}"
+        type="number"
+        class="kanban-carton-input"
+        data-record-id="${escapeHtml(row.id)}"
+        data-carton-field="${escapeHtml(field)}"
+        value="${escapeHtml(current)}"
+        step="any"
+        min="0"
+      />
+      <button
+        type="button"
+        class="kanban-carton-submit"
+        data-record-id="${escapeHtml(row.id)}"
+        data-carton-field="${escapeHtml(field)}"
+      >Save</button>
+    </div>
+  `;
+}
+
 function openOrderModal(row) {
   const jobId = row?.jobId ?? "";
   const jobName = row?.jobName ?? "";
@@ -479,7 +594,7 @@ function openOrderModal(row) {
   const order = row?.order && typeof row.order === "object" ? row.order : {};
   const lines = ORDER_FIELD_ORDER.map((fieldName) => {
     const v = order[fieldName];
-    const displayFieldName = fieldName === "# of packages" ? "Cartons Out" : fieldName;
+    const displayFieldName = fieldName === "# of packages" ? "Carton OUT" : fieldName;
     let rendered;
 
     if (fieldName === "Carton IN") {
@@ -645,7 +760,7 @@ viewerBackdrop.addEventListener("click", (e) => {
 
     const val = input.value.trim();
     if (val === "" || isNaN(Number(val)) || Number(val) < 0) {
-      alert("Please enter a valid number for Cartons Out.");
+      alert("Please enter a valid number for Carton OUT.");
       return;
     }
 
@@ -666,7 +781,7 @@ viewerBackdrop.addEventListener("click", (e) => {
       })
       .catch((err) => {
         setError(err?.message || String(err));
-        alert("Failed to save Cartons Out. See error above.");
+        alert("Failed to save Carton OUT. See error above.");
         btn.textContent = "Save";
       })
       .finally(() => {
@@ -724,6 +839,43 @@ viewerBackdrop.addEventListener("click", (e) => {
     return;
   }
 
+  if (e.target.closest(".put-meters-submit")) {
+    const btn = e.target.closest(".put-meters-submit");
+    const recordId = btn.dataset.recordId;
+    const input = viewerBody.querySelector(`.put-meters-input[data-record-id="${recordId}"]`);
+    if (!input) return;
+
+    const val = input.value.trim();
+    if (val === "" || isNaN(Number(val))) {
+      alert("Please enter a valid number for Meters.");
+      return;
+    }
+
+    btn.disabled = true;
+    btn.textContent = "Saving…";
+    setError("");
+
+    fetch("/api/meters", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id: recordId, meters: Number(val) }),
+    })
+      .then(async (r) => {
+        if (!r.ok) throw new Error(await r.text());
+        await refreshPutMetersPopup();
+        await load();
+      })
+      .catch((err) => {
+        setError(err?.message || String(err));
+        alert("Failed to save Meters. See error above.");
+        btn.textContent = "Save";
+      })
+      .finally(() => {
+        btn.disabled = false;
+      });
+    return;
+  }
+
   // Handle Meters save button inside order popup
   if (e.target.closest(".meters-submit")) {
     const btn = e.target.closest(".meters-submit");
@@ -752,6 +904,7 @@ viewerBackdrop.addEventListener("click", (e) => {
         setTimeout(() => { btn.textContent = "Save"; }, 1500);
         // Refresh data in background
         await load();
+        refreshPutMetersBadge();
       })
       .catch((err) => {
         setError(err?.message || String(err));
@@ -888,9 +1041,11 @@ function renderKanban(rows) {
         <div class="kanban-manager">Manager - ${displayCardTextValue(row.manager)}</div>
         <div class="kanban-material">${displayCardTextValue(displayMaterialOnlyCardValue(row.materialOnlyPress))}</div>
       </div>
+      <div class="kanban-cartons">
+        ${kanbanCartonEditor({ row, field: "cartonIn", label: "Carton IN", value: row.cartonIn })}
+        ${kanbanCartonEditor({ row, field: "cartonsOut", label: "Carton OUT", value: row.cartonsOut, fallbackValue: row.cartonIn })}
+      </div>
       <dl class="kanban-meta">
-        <dt>Carton IN</dt>
-        <dd>${escapeHtml(row.cartonIn ?? "")}</dd>
         <dt>Impressions</dt>
         <dd>${escapeHtml(row.impressions ?? "")}</dd>
         <dt>Meters</dt>
@@ -906,7 +1061,7 @@ function renderKanban(rows) {
       const slug = slugifyGroup(column.label);
       const writeAttr = column.writeValue === null || column.writeValue === undefined
         ? ""
-        : ` data-printer-value="${escapeHtml(column.writeValue)}"`;
+        : ` data-kanban-value="${escapeHtml(column.writeValue)}"`;
       return `
         <section class="kanban-column group-${escapeHtml(slug)}"${writeAttr}>
           <div class="kanban-column-header">
@@ -971,6 +1126,7 @@ async function load() {
     allRows = VIEW_MODES[currentView]?.kanban ? data : sortListRows(data);
     applyFilter();
     setStatus(`Loaded ${allRows.length} records`);
+    if (currentView === "mainFlow") refreshPutMetersBadge();
   } catch (e) {
     setStatus("Error");
     setError(e?.message || String(e));
@@ -993,6 +1149,7 @@ function setView(nextView) {
   const isKanban = Boolean(VIEW_MODES[currentView]?.kanban);
   jobsTable.hidden = isKanban;
   kanbanEl.hidden = !isKanban;
+  mainFlowActions.hidden = currentView !== "mainFlow";
   tbody.innerHTML = `<tr><td colspan="12" class="muted">Loading…</td></tr>`;
   kanbanEl.innerHTML = "";
 
@@ -1013,32 +1170,39 @@ function rowForTarget(target) {
   return allRows.find(r => r.id === id) || null;
 }
 
-async function moveKanbanCard(recordId, printerNumber) {
+async function moveKanbanCard(recordId, nextKanbanValue) {
   const row = allRows.find(r => r.id === recordId);
   if (!row) return;
 
-  const currentValue = String(row.printerNumber ?? "").trim();
-  const nextValue = String(printerNumber ?? "").trim();
+  const viewConfig = VIEW_MODES[currentView] || VIEW_MODES.kanban;
+  const valueField = viewConfig.valueField || "printerNumber";
+  const bodyField = viewConfig.bodyField || valueField;
+  const updateEndpoint = viewConfig.updateEndpoint || "/api/printer-number";
+  const currentValue = String(row[valueField] ?? "").trim();
+  const nextValue = String(nextKanbanValue ?? "").trim();
   const currentColumn = columnForRow(row);
   const nextColumn = columnsForCurrentKanban().find((column) => column.writeValue === nextValue) || null;
   if (currentValue === nextValue || (currentColumn && currentColumn === nextColumn)) return;
 
   setError("");
   setStatus(`Saving ${VIEW_MODES[currentView]?.label || "kanban"} column…`);
-  row.printerNumber = nextValue;
+  row[valueField] = nextValue;
   applyFilter();
 
   try {
-    const r = await fetch("/api/printer-number", {
+    const r = await fetch(updateEndpoint, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ id: recordId, printerNumber: nextValue }),
+      body: JSON.stringify({ id: recordId, [bodyField]: nextValue }),
     });
 
     if (!r.ok) throw new Error(await r.text());
     const result = await r.json().catch(() => ({}));
     if (result?.outsourceNorth) {
       row.outsourceNorth = result.outsourceNorth;
+    }
+    if (Object.prototype.hasOwnProperty.call(result, valueField)) {
+      row[valueField] = result[valueField];
     }
     await load();
 
@@ -1049,7 +1213,7 @@ async function moveKanbanCard(recordId, printerNumber) {
       alert("Truck left saved, but webhook failed. See error above.");
     }
   } catch (err) {
-    row.printerNumber = currentValue;
+    row[valueField] = currentValue;
     applyFilter();
     setStatus("Error");
     setError(err?.message || String(err));
@@ -1109,16 +1273,67 @@ function cleanupPointerDrag({ shouldMove = false, clientX = 0, clientY = 0 } = {
 
   const column = state.overColumn || columnAtPoint(clientX, clientY);
   if (!column) return;
-  if (!column.dataset.printerValue) {
-    alert("This Main flow column is read-only for dragging.");
+  if (!column.hasAttribute("data-kanban-value")) {
+    alert("This column is display-only for dragging.");
     return;
   }
 
-  moveKanbanCard(state.recordId, column.dataset.printerValue || "");
+  moveKanbanCard(state.recordId, column.dataset.kanbanValue || "");
 }
 
 // Events
 function handleJobsClick(e) {
+  if (e.target.closest(".kanban-carton-submit")) {
+    e.preventDefault();
+    e.stopPropagation();
+
+    const btn = e.target.closest(".kanban-carton-submit");
+    const recordId = btn.dataset.recordId;
+    const field = btn.dataset.cartonField;
+    const input = kanbanEl.querySelector(`.kanban-carton-input[data-record-id="${recordId}"][data-carton-field="${field}"]`);
+    if (!recordId || !input) return;
+
+    const val = input.value.trim();
+    if (val === "" || isNaN(Number(val)) || Number(val) < 0) {
+      alert(`Please enter a valid number for ${field === "cartonsOut" ? "Carton OUT" : "Carton IN"}.`);
+      return;
+    }
+
+    const body = { id: recordId };
+    if (field === "cartonsOut") {
+      body.cartonsOut = Number(val);
+    } else if (field === "cartonIn") {
+      body.cartonIn = Number(val);
+    } else {
+      return;
+    }
+
+    btn.disabled = true;
+    btn.textContent = "Saving…";
+    setError("");
+    setStatus(`Saving ${field === "cartonsOut" ? "Carton OUT" : "Carton IN"}…`);
+
+    fetch("/api/order-cartons", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    })
+      .then(async (r) => {
+        if (!r.ok) throw new Error(await r.text());
+        await load();
+      })
+      .catch((err) => {
+        setStatus("Error");
+        setError(err?.message || String(err));
+        alert(`Failed to save ${field === "cartonsOut" ? "Carton OUT" : "Carton IN"}. See error above.`);
+        btn.textContent = "Save";
+      })
+      .finally(() => {
+        btn.disabled = false;
+      });
+    return;
+  }
+
   if (e.target.closest(".job-open")) {
     e.preventDefault();
     const row = rowForTarget(e.target);
@@ -1300,6 +1515,11 @@ kanbanEl.addEventListener("pointerup", (e) => {
 });
 kanbanEl.addEventListener("pointercancel", () => cleanupPointerDrag());
 kanbanEl.addEventListener("dragstart", (e) => {
+  if (e.target.closest("input, button, select, textarea")) {
+    e.preventDefault();
+    return;
+  }
+
   const card = e.target.closest(".kanban-card");
   if (!card) return;
 
@@ -1334,18 +1554,19 @@ kanbanEl.addEventListener("drop", (e) => {
   column.classList.remove("drag-over");
   const recordId = e.dataTransfer.getData("text/plain") || draggedKanbanId;
   if (!recordId) return;
-  if (!column.dataset.printerValue) {
-    alert("This Main flow column is read-only for dragging.");
+  if (!column.hasAttribute("data-kanban-value")) {
+    alert("This column is display-only for dragging.");
     return;
   }
 
-  moveKanbanCard(recordId, column.dataset.printerValue || "");
+  moveKanbanCard(recordId, column.dataset.kanbanValue || "");
 });
 searchEl.addEventListener("input", applyFilter);
 refreshBtn.addEventListener("click", load);
 listViewBtn.addEventListener("click", () => setView("list"));
 kanbanViewBtn.addEventListener("click", () => setView("kanban"));
 mainFlowViewBtn.addEventListener("click", () => setView("mainFlow"));
+putMetersBtn.addEventListener("click", openPutMetersModal);
 
 // Init
 load();

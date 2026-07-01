@@ -3,6 +3,7 @@ const TABLE_ID = "tbloqSi9cbJUSa5JV";
 const OUTSOURCE_NORTH_VIEW_ID = "viwRkYqu8uDdjkNK0";
 const PRIORITY_VIEW_NAME = "Priority";
 const MAIN_FLOW_VIEW_NAME = "Main Flow";
+const MAIN_FLOW_FIELD_NAME = "Main Flow";
 const OUTSOURCE_NORTH_NOT_EMPTY_FORMULA = "LEN({Outsource North} & '') > 0";
 const AIRTABLE_LOCALE_PARAMS = {
   cellFormat: "string",
@@ -104,6 +105,7 @@ export default async function handler(req, res) {
         jobName: rec.fields["Job Name"] ?? "",
         outsourceNorth: rec.fields["Outsource North"] ?? "",
         printerNumber: rec.fields["Printer number"] ?? "",
+        mainFlow: rec.fields[MAIN_FLOW_FIELD_NAME] ?? "",
         printer: rec.fields["Printer"] ?? "",
         status: rec.fields["Status"] ?? "",
         productsOrdered: rec.fields["Products Ordered"] ?? false,
@@ -125,6 +127,7 @@ export default async function handler(req, res) {
         mockup: Array.isArray(rec.fields["Mock up"]) ? rec.fields["Mock up"] : [],
         method: rec.fields["Method"] ?? "",
         cartonIn: rec.fields["Carton IN"] ?? null,
+        cartonsOut: rec.fields["# of packages"] ?? null,
         impressions: rec.fields["Impressions"],
         // If Impr_left is blank/undefined, default it to the original
         // `Impressions` value (initial quantity). This treats an empty
