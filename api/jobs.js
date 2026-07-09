@@ -34,6 +34,7 @@ const ORDER_FIELD_ORDER = [
   "Graphic 4",
   "Width 4 cm",
   "Number 4",
+  "Dropbox link",
   "Manager Field",
   "Carton IN",
   "# of packages",

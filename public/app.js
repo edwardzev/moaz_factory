@@ -58,6 +58,7 @@ const ORDER_FIELD_ORDER = [
   "Graphic 4",
   "Width 4 cm",
   "Number 4",
+  "Dropbox link",
   "Manager Field",
   "Carton IN",
   "# of packages",
@@ -68,6 +69,10 @@ const ORDER_FIELD_ORDER = [
 const READ_ONLY_TEXT_FIELDS = new Set([
   "Product clent brings",
   "products to buy",
+]);
+
+const LINK_FIELDS = new Set([
+  "Dropbox link",
 ]);
 
 const EDITABLE_ORDER_NUMBER_FIELDS = new Set([
@@ -334,6 +339,12 @@ function readOnlyTextField(v) {
       placeholder="—"
       style="width:100%;min-height:48px;box-sizing:border-box;padding:8px 10px;font:inherit;line-height:1.35;border:1px solid var(--border);border-radius:var(--radiusSm);background:var(--header);color:var(--text);resize:vertical;"
     >${escapeHtml(value)}</textarea>`;
+}
+
+function linkField(v) {
+  const value = readOnlyTextValue(v).trim();
+  if (!value) return `<span class="muted">—</span>`;
+  return `<a href="${escapeHtml(value)}" target="_blank" rel="noopener noreferrer">${escapeHtml(value)}</a>`;
 }
 
 function editableOrderNumberField({ recordId, fieldName, value }) {
@@ -636,6 +647,8 @@ function openOrderModal(row) {
       rendered = editableOrderNumberField({ recordId: row.id, fieldName, value: v });
     } else if (fieldName === "Deadline") {
       rendered = fmtDeadline(v);
+    } else if (LINK_FIELDS.has(fieldName)) {
+      rendered = linkField(v);
     } else if (READ_ONLY_TEXT_FIELDS.has(fieldName)) {
       rendered = readOnlyTextField(v);
     } else if (isAirtableAttachmentArray(v)) {
@@ -666,6 +679,20 @@ function openOrderModal(row) {
   viewerBackdrop.setAttribute("aria-hidden", "false");
 }
 
+async function openOrderModalByRecordId(recordId) {
+  let row = allRows.find(item => item.id === recordId) || null;
+
+  if (!row?.order) {
+    const response = await fetch("/api/jobs", { cache: "no-store" });
+    if (!response.ok) throw new Error(await response.text());
+    const rows = await response.json();
+    row = Array.isArray(rows) ? rows.find(item => item.id === recordId) : null;
+  }
+
+  if (!row) throw new Error("Order not found in Full list.");
+  openOrderModal(row);
+}
+
 function closeViewer() {
   viewerBackdrop.style.display = "none";
   viewerBackdrop.setAttribute("aria-hidden", "true");
@@ -675,6 +702,20 @@ function closeViewer() {
 viewerClose.addEventListener("click", closeViewer);
 viewerBackdrop.addEventListener("click", (e) => {
   if (e.target === viewerBackdrop) closeViewer();
+
+  if (e.target.closest(".put-meters-row") && !e.target.closest(".put-meters-editor, input, button, select, textarea")) {
+    const rowEl = e.target.closest(".put-meters-row");
+    const recordId = rowEl?.dataset?.id || "";
+    if (!recordId) return;
+
+    e.preventDefault();
+    setError("");
+    openOrderModalByRecordId(recordId).catch((err) => {
+      setError(err?.message || String(err));
+      alert("Failed to open order. See error above.");
+    });
+    return;
+  }
 
   // Handle attachment view inside order popup
   if (e.target.closest(".order-attach-view")) {
