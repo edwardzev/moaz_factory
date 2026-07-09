@@ -680,7 +680,10 @@ function openOrderModal(row) {
 }
 
 async function openOrderModalByRecordId(recordId) {
-  let row = allRows.find(item => item.id === recordId) || null;
+  let row =
+    allRows.find(item => item.id === recordId) ||
+    putMetersRows.find(item => item.id === recordId) ||
+    null;
 
   if (!row?.order) {
     const response = await fetch("/api/jobs", { cache: "no-store" });

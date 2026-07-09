@@ -13,14 +13,44 @@ const AIRTABLE_LOCALE_PARAMS = {
   timeZone: "UTC",
   userLocale: "en-us",
 };
-const FIELDS = [
+const ORDER_FIELD_ORDER = [
+  "Impressions",
+  "Client name text",
+  "Job Name",
+  "Product clent brings",
+  "products to buy",
+  "Method",
+  "Mock up",
+  "Deadline",
+  "Sample",
+  "Graphic 1",
+  "Width 1 cm",
+  "Number 1",
+  "Graphic 2",
+  "Width 2 cm",
+  "Number 2",
+  "Graphic 3",
+  "Width 3",
+  "Number 3",
+  "Graphic 4",
+  "Width 4 cm",
+  "Number 4",
+  "Dropbox link",
+  "Manager Field",
+  "Carton IN",
+  "# of packages",
+  "Printed North",
+  "Meters",
+];
+const FIELDS = Array.from(new Set([
   "JOB ID",
   "Client name text",
   "Job Name",
   "Material only",
   "Outsource North",
   "Meters",
-];
+  ...ORDER_FIELD_ORDER,
+]));
 
 function scalarText(value) {
   if (value === null || value === undefined) return "";
@@ -75,6 +105,10 @@ export default async function handler(req, res) {
         materialOnlyPress: scalarText(rec.fields["Material only"]),
         outsourceNorth: scalarText(rec.fields["Outsource North"]),
         meters: rec.fields["Meters"] ?? null,
+        order: ORDER_FIELD_ORDER.reduce((acc, fieldName) => {
+          acc[fieldName] = rec.fields[fieldName] ?? null;
+          return acc;
+        }, {}),
       });
     }
 
