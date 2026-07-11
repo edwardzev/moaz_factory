@@ -482,9 +482,9 @@ function kanbanMockupsCell(mockups) {
       if (!url) return "";
 
       const thumb =
-        a?.thumbnails?.small?.url ||
         a?.thumbnails?.large?.url ||
         a?.thumbnails?.full?.url ||
+        a?.thumbnails?.small?.url ||
         null;
 
       const img = thumb
