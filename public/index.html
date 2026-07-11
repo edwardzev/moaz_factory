@@ -540,13 +540,12 @@
       flex: 0 0 26px;
       width: 26px;
       height: 26px;
-      border: 1px solid var(--btnSoftBorder);
-      border-radius: 6px;
+      display: inline-grid;
+      place-items: center;
+      color: var(--muted);
+      font-size: 22px;
       cursor: grab;
       touch-action: none;
-      background:
-        radial-gradient(circle, var(--muted) 1.5px, transparent 1.6px)
-        0 0 / 8px 8px;
       opacity: 0.75;
     }
 
@@ -656,62 +655,116 @@
       font-size: 0.85em;
     }
   </style>
+  <link rel="stylesheet" href="https://unpkg.com/@phosphor-icons/web@2.1.2/src/regular/style.css" />
+  <link rel="stylesheet" href="/style.css" />
 </head>
 
-<body>
-  <h2>Production Tracking</h2>
-
-  <div class="bar">
-    <button id="refreshBtn">Refresh</button>
+<body data-view="list">
+  <header class="app-header">
+    <div class="brand" aria-label="Production Tracking">
+      <span class="brand-accent" aria-hidden="true"></span>
+      <span class="brand-title">Production Tracking</span>
+    </div>
     <div class="view-toggle" role="tablist" aria-label="View">
       <button id="listViewBtn" class="view-tab active" type="button" role="tab" aria-selected="true">Full list</button>
       <button id="mainFlowViewBtn" class="view-tab" type="button" role="tab" aria-selected="false">Main flow</button>
     </div>
-    <input id="search" placeholder="Search Job ID…" />
-    <span id="status" class="status">Idle</span>
-  </div>
-
-  <div id="error" class="error"></div>
-
-  <div id="mainFlowActions" class="board-actions" hidden>
-    <button id="putMetersBtn" class="put-meters-button" type="button">
-      <span>Put meters</span>
-      <span id="putMetersBadge" class="put-meters-badge">0</span>
+    <button id="refreshBtn" class="header-action" type="button" aria-label="Refresh">
+      <i class="ph ph-arrows-clockwise" aria-hidden="true"></i>
+      <span>Refresh</span>
     </button>
-  </div>
+  </header>
 
-  <table id="jobsTable">
-    <thead>
-      <tr>
-        <th>Job ID</th>
-        <th>Client name text</th>
-        <th>Job Name</th>
-        <th>Outsource North</th>
-        <th>Mock up</th>
-        <th>Method</th>
-        <th>Carton IN</th>
-        <th>Impressions</th>
-        <th>Meters</th>
-        <th>Start</th>
-        <th>Ready</th>
-        <th>Sent</th>
-      </tr>
-    </thead>
-    <tbody id="tbody">
-      <tr>
-        <td colspan="12" class="muted">Loading…</td>
-      </tr>
-    </tbody>
-  </table>
+  <main class="app-main">
+    <section class="command-bar" aria-label="Production controls">
+      <label class="search-shell" for="search">
+        <i class="ph ph-magnifying-glass" aria-hidden="true"></i>
+        <input id="search" placeholder="Search Job ID…" autocomplete="off" />
+      </label>
+      <span id="status" class="status">Idle</span>
+      <div id="listLegend" class="status-legend" aria-label="Status group legend">
+        <span><span class="legend-line legend-line-primary"></span>Outsource North</span>
+        <span><span class="legend-line legend-line-secondary"></span>Other groups</span>
+      </div>
+      <div id="mainFlowActions" class="board-actions" hidden>
+        <button id="putMetersBtn" class="put-meters-button" type="button" aria-label="Put meters">
+          <i class="ph ph-ruler" aria-hidden="true"></i>
+          <span>Put meters</span>
+          <span id="putMetersBadge" class="put-meters-badge">0</span>
+        </button>
+      </div>
+    </section>
 
-  <div id="kanban" class="kanban" hidden></div>
+    <div id="error" class="error"></div>
+
+    <div id="jobsTableShell" class="data-grid-shell">
+      <table id="jobsTable">
+        <colgroup>
+          <col class="col-job-id" />
+          <col class="col-client" />
+          <col class="col-job-name" />
+          <col class="col-outsource" />
+          <col class="col-mockup" />
+          <col class="col-method" />
+          <col class="col-carton-in" />
+          <col class="col-impressions" />
+          <col class="col-meters" />
+          <col class="col-start" />
+          <col class="col-ready" />
+          <col class="col-sent" />
+        </colgroup>
+        <thead>
+          <tr class="table-superhead" aria-hidden="true">
+            <th colspan="3">Order</th>
+            <th colspan="6">Production</th>
+            <th colspan="3">Actions</th>
+          </tr>
+          <tr class="table-field-head">
+            <th>Job ID</th>
+            <th>Client name text</th>
+            <th>Job Name</th>
+            <th>Outsource North</th>
+            <th>Mock up</th>
+            <th>Method</th>
+            <th>Carton IN</th>
+            <th>Impressions</th>
+            <th>Meters</th>
+            <th>Start</th>
+            <th>Ready</th>
+            <th>Sent</th>
+          </tr>
+        </thead>
+        <tbody id="tbody">
+          <tr>
+            <td colspan="12" class="muted">Loading…</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <section id="kanbanWorkspace" class="kanban-workspace" hidden>
+      <div id="kanban" class="kanban" hidden></div>
+      <aside id="orderInspector" class="order-inspector" aria-hidden="true" hidden>
+        <div class="order-inspector-header">
+          <div id="orderInspectorTitle" class="order-inspector-title">Selected order</div>
+          <button id="orderInspectorClose" class="icon-button" type="button" aria-label="Close selected order">
+            <i class="ph ph-x" aria-hidden="true"></i>
+          </button>
+        </div>
+        <div id="orderInspectorBody" class="order-inspector-body"></div>
+      </aside>
+    </section>
+  </main>
 
   <!-- Attachment viewer modal -->
-  <div id="viewerBackdrop" class="modal-backdrop" role="dialog" aria-modal="true" aria-hidden="true">
+  <div id="viewerBackdrop" class="modal-backdrop" role="dialog" aria-modal="true" aria-hidden="true" aria-labelledby="viewerTitle">
     <div class="modal">
       <div class="modal-header">
         <div id="viewerTitle" class="modal-title"></div>
-        <button id="viewerClose" class="modal-close">Close</button>
+        <button id="viewerClose" class="modal-close" type="button" aria-label="Close dialog">
+          <span>Close</span>
+          <i class="ph ph-x" aria-hidden="true"></i>
+        </button>
       </div>
       <div class="modal-body" id="viewerBody"></div>
     </div>

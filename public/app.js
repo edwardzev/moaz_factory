@@ -4,12 +4,19 @@ const errEl = document.getElementById("error");
 const searchEl = document.getElementById("search");
 const refreshBtn = document.getElementById("refreshBtn");
 const jobsTable = document.getElementById("jobsTable");
+const jobsTableShell = document.getElementById("jobsTableShell");
 const kanbanEl = document.getElementById("kanban");
+const kanbanWorkspace = document.getElementById("kanbanWorkspace");
 const listViewBtn = document.getElementById("listViewBtn");
 const mainFlowViewBtn = document.getElementById("mainFlowViewBtn");
+const listLegend = document.getElementById("listLegend");
 const mainFlowActions = document.getElementById("mainFlowActions");
 const putMetersBtn = document.getElementById("putMetersBtn");
 const putMetersBadge = document.getElementById("putMetersBadge");
+const orderInspector = document.getElementById("orderInspector");
+const orderInspectorTitle = document.getElementById("orderInspectorTitle");
+const orderInspectorBody = document.getElementById("orderInspectorBody");
+const orderInspectorClose = document.getElementById("orderInspectorClose");
 
 const viewerBackdrop = document.getElementById("viewerBackdrop");
 const viewerTitle = document.getElementById("viewerTitle");
@@ -19,6 +26,8 @@ const viewerClose = document.getElementById("viewerClose");
 let allRows = [];
 let currentView = "list";
 let putMetersRows = [];
+let selectedInspectorId = null;
+let suppressKanbanSelectionUntil = 0;
 
 const VIEW_MODES = {
   list: {
@@ -81,6 +90,26 @@ const EDITABLE_ORDER_NUMBER_FIELDS = new Set([
   "Number 3",
   "Number 4",
 ]);
+
+const ORDER_SECTION_STARTS = new Map([
+  ["Impressions", "Order details"],
+  ["Graphic 1", "Artwork"],
+  ["Dropbox link", "Production"],
+]);
+
+// The side panel is intentionally a shorter popup. This subset keeps the
+// relative order from ORDER_FIELD_ORDER and does not introduce new fields.
+const INSPECTOR_FIELD_ORDER = [
+  "Impressions",
+  "Client name text",
+  "Job Name",
+  "Method",
+  "Mock up",
+  "Manager Field",
+  "Carton IN",
+  "# of packages",
+  "Meters",
+];
 
 const MATERIAL_ONLY_CARD_LABELS = new Map([
   ["לא, אני צריך רק חומרים", "Material only"],
@@ -280,6 +309,7 @@ function fmtLogPreview(log) {
 function openViewer({ jobId, jobName, url, filename, mime }) {
   const title = `${jobId ?? ""}${jobName ? ` — ${jobName}` : ""}`.trim();
   viewerTitle.textContent = title || "Preview";
+  viewerBackdrop.dataset.mode = "attachment";
 
   const safeUrl = String(url || "");
   const safeFilename = String(filename || "file");
@@ -337,22 +367,25 @@ function readOnlyTextField(v) {
       readonly
       aria-readonly="true"
       placeholder="—"
-      style="width:100%;min-height:48px;box-sizing:border-box;padding:8px 10px;font:inherit;line-height:1.35;border:1px solid var(--border);border-radius:var(--radiusSm);background:var(--header);color:var(--text);resize:vertical;"
     >${escapeHtml(value)}</textarea>`;
 }
 
 function linkField(v) {
   const value = readOnlyTextValue(v).trim();
   if (!value) return `<span class="muted">—</span>`;
-  return `<a href="${escapeHtml(value)}" target="_blank" rel="noopener noreferrer">${escapeHtml(value)}</a>`;
+  return `
+    <a class="external-link" href="${escapeHtml(value)}" target="_blank" rel="noopener noreferrer">
+      <i class="ph ph-arrow-square-out" aria-hidden="true"></i>
+      <span>${escapeHtml(value)}</span>
+    </a>`;
 }
 
 function editableOrderNumberField({ recordId, fieldName, value }) {
   const current = value != null ? escapeHtml(String(value)) : "";
   return `
-    <div data-order-number-editor style="display:flex;align-items:center;gap:8px;">
-      <input type="number" class="order-number-input" data-record-id="${escapeHtml(recordId)}" data-field="${escapeHtml(fieldName)}" value="${current}" step="any" style="width:120px;padding:8px 10px;font-size:1em;border:1px solid var(--border);border-radius:var(--radiusSm);background:var(--surface);color:var(--text);" />
-      <button type="button" class="order-number-submit" data-record-id="${escapeHtml(recordId)}" data-field="${escapeHtml(fieldName)}" style="padding:8px 14px;font-size:0.9em;">Save</button>
+    <div class="field-editor" data-order-number-editor>
+      <input type="number" class="order-number-input" data-record-id="${escapeHtml(recordId)}" data-field="${escapeHtml(fieldName)}" value="${current}" step="any" />
+      <button type="button" class="order-number-submit" data-record-id="${escapeHtml(recordId)}" data-field="${escapeHtml(fieldName)}">Save</button>
     </div>`;
 }
 
@@ -360,7 +393,7 @@ function attachmentsList(items, { jobId, jobName }) {
   const arr = Array.isArray(items) ? items : [];
   if (!arr.length) return `<span class="muted">—</span>`;
 
-  return arr
+  const itemsHtml = arr
     .map((a) => {
       const url = a?.url;
       const filename = a?.filename || "file";
@@ -374,23 +407,24 @@ function attachmentsList(items, { jobId, jobName }) {
         null;
 
       const preview = thumb
-        ? `<img src="${escapeHtml(thumb)}" alt="${escapeHtml(filename)}" style="width:168px;height:auto;border:1px solid #ddd;vertical-align:middle;"/>`
+        ? `<img src="${escapeHtml(thumb)}" alt="${escapeHtml(filename)}"/>`
         : `<span class="pill">${escapeHtml(filename)}</span>`;
 
       return `
-        <div style="display:inline-block;margin-right:10px;margin-bottom:10px;vertical-align:top;">
-          <a href="#" class="order-attach-view" data-url="${escapeHtml(url)}" data-filename="${escapeHtml(filename)}" data-mime="${escapeHtml(mime)}" data-jobid="${escapeHtml(jobId ?? "")}" data-jobname="${escapeHtml(jobName ?? "")}" title="View ${escapeHtml(filename)}" style="text-decoration:none;">
+        <div class="attachment-item">
+          <a href="#" class="attachment-preview order-attach-view" data-url="${escapeHtml(url)}" data-filename="${escapeHtml(filename)}" data-mime="${escapeHtml(mime)}" data-jobid="${escapeHtml(jobId ?? "")}" data-jobname="${escapeHtml(jobName ?? "")}" title="View ${escapeHtml(filename)}">
             ${preview}
           </a>
-          <div style="margin-top:4px;">
-            <a href="#" class="order-attach-view muted" data-url="${escapeHtml(url)}" data-filename="${escapeHtml(filename)}" data-mime="${escapeHtml(mime)}" data-jobid="${escapeHtml(jobId ?? "")}" data-jobname="${escapeHtml(jobName ?? "")}" style="text-decoration:underline;">view</a>
-            <span class="muted"> · </span>
-            <a href="#" class="order-attach-download muted" data-url="${escapeHtml(url)}" data-filename="${escapeHtml(filename)}" style="text-decoration:underline;">download</a>
+          <div class="attachment-links">
+            <a href="#" class="order-attach-view" data-url="${escapeHtml(url)}" data-filename="${escapeHtml(filename)}" data-mime="${escapeHtml(mime)}" data-jobid="${escapeHtml(jobId ?? "")}" data-jobname="${escapeHtml(jobName ?? "")}">view</a>
+            <a href="#" class="order-attach-download" data-url="${escapeHtml(url)}" data-filename="${escapeHtml(filename)}">download</a>
           </div>
         </div>
       `;
     })
     .join("");
+
+  return `<div class="attachment-list">${itemsHtml}</div>`;
 }
 
 function mockupsCell(mockups) {
@@ -411,11 +445,11 @@ function mockupsCell(mockups) {
         null;
 
       const img = thumb
-        ? `<img src="${escapeHtml(thumb)}" alt="${escapeHtml(filename)}" style="width:56px;height:auto;border:1px solid #ddd;"/>`
+        ? `<img src="${escapeHtml(thumb)}" alt="${escapeHtml(filename)}"/>`
         : `<span class="pill">${escapeHtml(filename)}</span>`;
 
       return `
-        <div style="display:inline-block;margin-right:8px;margin-bottom:6px;vertical-align:top;">
+        <div class="mockup-item">
           <button
             type="button"
             class="mockup-view"
@@ -423,14 +457,12 @@ function mockupsCell(mockups) {
             data-filename="${escapeHtml(filename)}"
             data-mime="${escapeHtml(mime)}"
             title="View ${escapeHtml(filename)}"
-            style="border:0;background:transparent;padding:0;cursor:pointer;"
           >
             ${img}
           </button>
-          <div style="margin-top:4px;">
-            <a href="#" class="mockup-view muted" data-url="${escapeHtml(url)}" data-filename="${escapeHtml(filename)}" data-mime="${escapeHtml(mime)}" style="text-decoration:underline;">view</a>
-            <span class="muted"> · </span>
-            <a href="#" class="mockup-download muted" data-url="${escapeHtml(url)}" data-filename="${escapeHtml(filename)}" style="text-decoration:underline;">download</a>
+          <div class="mockup-links">
+            <a href="#" class="mockup-view" data-url="${escapeHtml(url)}" data-filename="${escapeHtml(filename)}" data-mime="${escapeHtml(mime)}">view</a>
+            <a href="#" class="mockup-download" data-url="${escapeHtml(url)}" data-filename="${escapeHtml(filename)}">download</a>
           </div>
         </div>
       `;
@@ -456,11 +488,11 @@ function kanbanMockupsCell(mockups) {
         null;
 
       const img = thumb
-        ? `<img src="${escapeHtml(thumb)}" alt="${escapeHtml(filename)}" style="width:56px;height:auto;border:1px solid #ddd;"/>`
+        ? `<img src="${escapeHtml(thumb)}" alt="${escapeHtml(filename)}"/>`
         : `<span class="pill">${escapeHtml(filename)}</span>`;
 
       return `
-        <div style="display:inline-block;margin-right:8px;margin-bottom:6px;vertical-align:top;">
+        <div class="mockup-item">
           <a
             href="#"
             class="mockup-view"
@@ -468,14 +500,12 @@ function kanbanMockupsCell(mockups) {
             data-filename="${escapeHtml(filename)}"
             data-mime="${escapeHtml(mime)}"
             title="View ${escapeHtml(filename)}"
-            style="display:inline-block;text-decoration:none;"
           >
             ${img}
           </a>
-          <div style="margin-top:4px;">
-            <a href="#" class="mockup-view muted" data-url="${escapeHtml(url)}" data-filename="${escapeHtml(filename)}" data-mime="${escapeHtml(mime)}" style="text-decoration:underline;">view</a>
-            <span class="muted"> · </span>
-            <a href="#" class="mockup-download muted" data-url="${escapeHtml(url)}" data-filename="${escapeHtml(filename)}" style="text-decoration:underline;">download</a>
+          <div class="mockup-links">
+            <a href="#" class="mockup-view" data-url="${escapeHtml(url)}" data-filename="${escapeHtml(filename)}" data-mime="${escapeHtml(mime)}">view</a>
+            <a href="#" class="mockup-download" data-url="${escapeHtml(url)}" data-filename="${escapeHtml(filename)}">download</a>
           </div>
         </div>
       `;
@@ -552,6 +582,7 @@ async function refreshPutMetersPopup() {
 
 function openPutMetersModal() {
   viewerTitle.textContent = "Put meters";
+  viewerBackdrop.dataset.mode = "put-meters";
   viewerBody.innerHTML = `<div class="put-meters-list" data-put-meters-list><div class="muted">Loading…</div></div>`;
   viewerBackdrop.style.display = "flex";
   viewerBackdrop.setAttribute("aria-hidden", "false");
@@ -588,11 +619,127 @@ function kanbanCartonEditor({ row, field, label, value, fallbackValue = null }) 
   `;
 }
 
+function orderCartonEditor({ row, fieldName, value, fallbackValue = null, inspector = false }) {
+  const isCartonOut = fieldName === "# of packages";
+  const current = cartonFieldInputValue(value, fallbackValue);
+  const inputClass = isCartonOut ? "cartons-out-input" : "carton-in-input";
+  const buttonClass = isCartonOut ? "cartons-out-submit" : "carton-in-submit";
+  const editorClass = inspector ? "inspector-editor" : "field-editor";
+
+  return `
+    <div class="${editorClass}">
+      <input
+        type="number"
+        class="${inputClass}"
+        data-record-id="${escapeHtml(row.id)}"
+        value="${escapeHtml(current)}"
+        step="any"
+        min="0"
+      />
+      <button type="button" class="${buttonClass}" data-record-id="${escapeHtml(row.id)}">Save</button>
+    </div>`;
+}
+
+function closeOrderInspector() {
+  selectedInspectorId = null;
+  orderInspector.hidden = true;
+  orderInspector.setAttribute("aria-hidden", "true");
+  orderInspector.removeAttribute("data-id");
+  orderInspectorTitle.textContent = "Selected order";
+  orderInspectorBody.innerHTML = "";
+  kanbanWorkspace.classList.remove("inspector-open");
+  kanbanEl.querySelectorAll(".kanban-card.selected").forEach(card => card.classList.remove("selected"));
+}
+
+function renderOrderInspector(row) {
+  if (!row) {
+    closeOrderInspector();
+    return;
+  }
+
+  const jobId = row.jobId ?? "";
+  const jobName = row.jobName ?? "";
+  const order = row.order && typeof row.order === "object" ? row.order : {};
+
+  orderInspector.dataset.id = row.id;
+  orderInspectorTitle.innerHTML = `
+    <a href="#" class="inspector-title-job job-open" aria-label="Open order ${escapeHtml(jobId)}">
+      Job ${escapeHtml(jobId)}
+    </a>`;
+
+  const fields = INSPECTOR_FIELD_ORDER.map((fieldName) => {
+    const value = order[fieldName];
+    const displayFieldName = fieldName === "# of packages" ? "Carton OUT" : fieldName;
+    let rendered;
+
+    if (fieldName === "Carton IN") {
+      rendered = orderCartonEditor({ row, fieldName, value, inspector: true });
+    } else if (fieldName === "# of packages") {
+      rendered = orderCartonEditor({
+        row,
+        fieldName,
+        value,
+        fallbackValue: order["Carton IN"],
+        inspector: true,
+      });
+    } else if (fieldName === "Method") {
+      const method = displayMethod(value);
+      rendered = method.trim() ? escapeHtml(method) : `<span class="muted">—</span>`;
+    } else if (isAirtableAttachmentArray(value)) {
+      rendered = attachmentsList(value, { jobId, jobName });
+    } else if (Array.isArray(value)) {
+      rendered = value.length ? escapeHtml(value.join(", ")) : `<span class="muted">—</span>`;
+    } else {
+      rendered = fmtScalar(value);
+    }
+
+    return `
+      <div class="inspector-field" data-inspector-field="${escapeHtml(fieldName)}">
+        <div class="inspector-field-label">${escapeHtml(displayFieldName)}</div>
+        <div class="inspector-field-value">${rendered}</div>
+      </div>`;
+  }).join("");
+
+  orderInspectorBody.innerHTML = `
+    <div class="inspector-order-context" dir="auto">${escapeHtml(jobName)}</div>
+    <div class="inspector-fields">${fields}</div>`;
+  orderInspector.hidden = false;
+  orderInspector.setAttribute("aria-hidden", "false");
+  kanbanWorkspace.classList.add("inspector-open");
+}
+
+function selectOrderInspector(row) {
+  selectedInspectorId = row?.id || null;
+  if (!selectedInspectorId) {
+    closeOrderInspector();
+    return;
+  }
+
+  renderOrderInspector(row);
+  kanbanEl.querySelectorAll(".kanban-card").forEach((card) => {
+    card.classList.toggle("selected", card.dataset.id === selectedInspectorId);
+  });
+}
+
+function reconcileOrderInspector() {
+  if (currentView !== "mainFlow" || !selectedInspectorId) return;
+  const row = allRows.find(item => item.id === selectedInspectorId) || null;
+  if (!row) {
+    closeOrderInspector();
+    return;
+  }
+  selectOrderInspector(row);
+}
+
 function openOrderModal(row) {
   const jobId = row?.jobId ?? "";
   const jobName = row?.jobName ?? "";
-  const title = `${jobId}${jobName ? ` — ${jobName}` : ""}`.trim();
-  viewerTitle.textContent = title || "Order";
+  const safeJobId = escapeHtml(jobId);
+  const safeJobName = escapeHtml(jobName);
+  viewerTitle.innerHTML = safeJobId || safeJobName
+    ? `<span class="modal-job-id">${safeJobId}</span>${safeJobName ? `<span aria-hidden="true"> — </span><span dir="auto">${safeJobName}</span>` : ""}`
+    : "Order";
+  viewerBackdrop.dataset.mode = "order";
 
   const order = row?.order && typeof row.order === "object" ? row.order : {};
   const lines = ORDER_FIELD_ORDER.map((fieldName) => {
@@ -601,31 +748,18 @@ function openOrderModal(row) {
     let rendered;
 
     if (fieldName === "Carton IN") {
-      const current = v != null ? escapeHtml(String(v)) : "";
-      rendered = `
-        <div style="display:flex;align-items:center;gap:8px;">
-          <input type="number" class="carton-in-input" data-record-id="${escapeHtml(row.id)}" value="${current}" step="any" min="0" style="width:120px;padding:8px 10px;font-size:1em;border:1px solid var(--border);border-radius:var(--radiusSm);background:var(--surface);color:var(--text);" />
-          <button type="button" class="carton-in-submit" data-record-id="${escapeHtml(row.id)}" style="padding:8px 14px;font-size:0.9em;">Save</button>
-        </div>`;
+      rendered = orderCartonEditor({ row, fieldName, value: v });
     } else if (fieldName === "# of packages") {
-      const defaultValue = v != null ? v : order["Carton IN"];
-      const current = defaultValue != null ? escapeHtml(String(defaultValue)) : "";
-      rendered = `
-        <div style="display:flex;align-items:center;gap:8px;">
-          <input type="number" class="cartons-out-input" data-record-id="${escapeHtml(row.id)}" value="${current}" step="any" min="0" style="width:120px;padding:8px 10px;font-size:1em;border:1px solid var(--border);border-radius:var(--radiusSm);background:var(--surface);color:var(--text);" />
-          <button type="button" class="cartons-out-submit" data-record-id="${escapeHtml(row.id)}" style="padding:8px 14px;font-size:0.9em;">Save</button>
-        </div>`;
+      rendered = orderCartonEditor({ row, fieldName, value: v, fallbackValue: order["Carton IN"] });
     } else if (fieldName === "Meters") {
-      // Editable number input with submit button
       const current = v != null ? escapeHtml(String(v)) : "";
       rendered = `
-        <div style="display:flex;align-items:center;gap:8px;">
-          <input type="number" class="meters-input" data-record-id="${escapeHtml(row.id)}" value="${current}" step="any" style="width:120px;padding:8px 10px;font-size:1em;border:1px solid var(--border);border-radius:var(--radiusSm);background:var(--surface);color:var(--text);" />
-          <button type="button" class="meters-submit" data-record-id="${escapeHtml(row.id)}" style="padding:8px 14px;font-size:0.9em;">Save</button>
-          <span class="muted" style="font-size:0.9em;">note: write x2 of actual meters.</span>
+        <div class="field-editor">
+          <input type="number" class="meters-input" data-record-id="${escapeHtml(row.id)}" value="${current}" step="any" />
+          <button type="button" class="meters-submit" data-record-id="${escapeHtml(row.id)}">Save</button>
+          <span class="field-note">note: write x2 of actual meters.</span>
         </div>`;
     } else if (fieldName === "Printed North") {
-      // Editable single-select with submit button
       const current = v != null ? escapeHtml(String(v)) : "";
       const options = ["Printed North DTF", "Printed North Sublim...", "Printed North UVDTF"];
       const optionsHtml = options.map(opt => {
@@ -633,12 +767,12 @@ function openOrderModal(row) {
         return `<option value="${escapeHtml(opt)}" ${selected}>${escapeHtml(opt)}</option>`;
       }).join("");
       rendered = `
-        <div style="display:flex;align-items:center;gap:8px;">
-          <select class="printed-north-select" data-record-id="${escapeHtml(row.id)}" style="width:180px;padding:8px 10px;font-size:1em;border:1px solid var(--border);border-radius:var(--radiusSm);background:var(--surface);color:var(--text);">
+        <div class="field-editor">
+          <select class="printed-north-select" data-record-id="${escapeHtml(row.id)}">
             <option value="">-- Select --</option>
             ${optionsHtml}
           </select>
-          <button type="button" class="printed-north-submit" data-record-id="${escapeHtml(row.id)}" style="padding:8px 14px;font-size:0.9em;">Save</button>
+          <button type="button" class="printed-north-submit" data-record-id="${escapeHtml(row.id)}">Save</button>
         </div>`;
     } else if (fieldName === "Method") {
       const m = displayMethod(v);
@@ -659,17 +793,23 @@ function openOrderModal(row) {
       rendered = fmtScalar(v);
     }
 
+    const sectionLabel = ORDER_SECTION_STARTS.get(fieldName);
+    const sectionRow = sectionLabel
+      ? `<tr class="order-sheet-section" aria-hidden="true"><td colspan="2">${escapeHtml(sectionLabel)}</td></tr>`
+      : "";
+
     return `
-      <tr>
-        <td style="width:260px;"><strong>${escapeHtml(displayFieldName)}</strong></td>
-        <td>${rendered}</td>
+      ${sectionRow}
+      <tr data-order-field="${escapeHtml(fieldName)}">
+        <td class="order-field-label"><strong>${escapeHtml(displayFieldName)}</strong></td>
+        <td class="order-field-value">${rendered}</td>
       </tr>
     `;
   }).join("");
 
   viewerBody.innerHTML = `
-    <div style="overflow:auto;max-height:65vh;font-size:0.7em;">
-      <table style="width:100%;border-collapse:separate;border-spacing:0;">
+    <div class="order-sheet-scroll" data-order-sheet-scroll>
+      <table class="order-sheet">
         <tbody>${lines}</tbody>
       </table>
     </div>
@@ -699,11 +839,17 @@ async function openOrderModalByRecordId(recordId) {
 function closeViewer() {
   viewerBackdrop.style.display = "none";
   viewerBackdrop.setAttribute("aria-hidden", "true");
+  delete viewerBackdrop.dataset.mode;
+  viewerTitle.textContent = "";
   viewerBody.innerHTML = "";
 }
 
 viewerClose.addEventListener("click", closeViewer);
-viewerBackdrop.addEventListener("click", (e) => {
+function orderEditorRootForTarget(target) {
+  return target.closest("#orderInspectorBody") || viewerBody;
+}
+
+function handleOrderSurfaceClick(e) {
   if (e.target === viewerBackdrop) closeViewer();
 
   if (e.target.closest(".put-meters-row") && !e.target.closest(".put-meters-editor, input, button, select, textarea")) {
@@ -753,7 +899,7 @@ viewerBackdrop.addEventListener("click", (e) => {
   if (e.target.closest(".carton-in-submit")) {
     const btn = e.target.closest(".carton-in-submit");
     const recordId = btn.dataset.recordId;
-    const input = viewerBody.querySelector(`.carton-in-input[data-record-id="${recordId}"]`);
+    const input = orderEditorRootForTarget(e.target).querySelector(`.carton-in-input[data-record-id="${recordId}"]`);
     if (!input) return;
 
     const val = input.value.trim();
@@ -791,7 +937,7 @@ viewerBackdrop.addEventListener("click", (e) => {
   if (e.target.closest(".cartons-out-submit")) {
     const btn = e.target.closest(".cartons-out-submit");
     const recordId = btn.dataset.recordId;
-    const input = viewerBody.querySelector(`.cartons-out-input[data-record-id="${recordId}"]`);
+    const input = orderEditorRootForTarget(e.target).querySelector(`.cartons-out-input[data-record-id="${recordId}"]`);
     if (!input) return;
 
     const val = input.value.trim();
@@ -991,9 +1137,16 @@ viewerBackdrop.addEventListener("click", (e) => {
       });
     return;
   }
-});
+}
+viewerBackdrop.addEventListener("click", handleOrderSurfaceClick);
+orderInspector.addEventListener("click", handleOrderSurfaceClick);
 document.addEventListener("keydown", (e) => {
-  if (e.key === "Escape" && viewerBackdrop.style.display === "flex") closeViewer();
+  if (e.key !== "Escape") return;
+  if (viewerBackdrop.style.display === "flex") {
+    closeViewer();
+  } else if (!orderInspector.hidden) {
+    closeOrderInspector();
+  }
 });
 
 function renderTable(rows) {
@@ -1004,7 +1157,7 @@ function renderTable(rows) {
 
   const rowHtml = (r, rowClass) => `
     <tr data-id="${r.id}" class="${escapeHtml(rowClass || "")}">
-      <td><a href="#" class="pill job-emph job-open" style="text-decoration:none;">${escapeHtml(r.jobId)}</a></td>
+      <td><a href="#" class="pill job-emph job-open">${escapeHtml(r.jobId)}</a></td>
       <td>${escapeHtml(r.clientNameText ?? "")}</td>
       <td>${escapeHtml(r.jobName ?? "")}</td>
       <td>${escapeHtml(r.outsourceNorth ?? "")}</td>
@@ -1013,19 +1166,19 @@ function renderTable(rows) {
       <td>
         <div>
           <div><strong>${escapeHtml(r.cartonIn ?? "")}</strong></div>
-          <button class="product-in" type="button">Product in</button>
+          <button class="product-in" type="button"><i class="ph ph-package" aria-hidden="true"></i><span>Product in</span></button>
         </div>
       </td>
       <td class="right">${escapeHtml(r.impressions)}</td>
       <td class="right">${r.meters != null ? escapeHtml(r.meters) : '<span class="muted">—</span>'}</td>
       <td>
-        <button class="start" type="button">Start</button>
+        <button class="start" type="button"><i class="ph ph-play" aria-hidden="true"></i><span>Start</span></button>
       </td>
       <td>
-        <button class="ready-sent" type="button" data-action="ready">Ready</button>
+        <button class="ready-sent" type="button" data-action="ready"><i class="ph ph-check" aria-hidden="true"></i><span>Ready</span></button>
       </td>
       <td>
-        <button class="ready-sent" type="button" data-action="sent">Sent</button>
+        <button class="ready-sent" type="button" data-action="sent"><i class="ph ph-paper-plane-tilt" aria-hidden="true"></i><span>Sent</span></button>
       </td>
     </tr>
   `;
@@ -1040,7 +1193,7 @@ function renderTable(rows) {
       const groupClass = `group-${slug}`;
       const rowClass = `row-${slug}`;
       const header = groupLabel !== lastGroup
-        ? `<tr class="group-row ${groupClass}" data-group="${escapeHtml(key)}"><td colspan="12">${escapeHtml(groupLabel)}</td></tr>`
+        ? `<tr class="group-row ${groupClass}" data-group="${escapeHtml(key)}"><td colspan="12"><i class="ph ph-caret-down" aria-hidden="true"></i><span>${escapeHtml(groupLabel)}</span></td></tr>`
         : "";
       lastGroup = groupLabel;
       return header + rowHtml(r, rowClass);
@@ -1064,10 +1217,16 @@ function renderKanban(rows) {
   }
 
   const cardHtml = (row) => `
-    <article class="kanban-card" data-id="${escapeHtml(row.id)}" draggable="true">
+    <article
+      class="kanban-card${row.id === selectedInspectorId ? " selected" : ""}"
+      data-id="${escapeHtml(row.id)}"
+      draggable="true"
+      tabindex="0"
+      aria-label="Select order ${escapeHtml(row.jobId)} for details"
+    >
       <div class="kanban-card-head">
-        <span class="kanban-drag-handle" title="Drag order" aria-label="Drag order"></span>
-        <a href="#" class="pill job-emph job-open" style="text-decoration:none;">${escapeHtml(row.jobId)}</a>
+        <i class="ph ph-dots-six-vertical kanban-drag-handle" title="Drag order" aria-label="Drag order"></i>
+        <a href="#" class="pill job-emph job-open">${escapeHtml(row.jobId)}</a>
         ${displayMethod(row.method).trim() ? `<span class="pill">${escapeHtml(displayMethod(row.method))}</span>` : ""}
       </div>
       <div class="kanban-title">${escapeHtml(row.jobName ?? "")}</div>
@@ -1099,7 +1258,7 @@ function renderKanban(rows) {
         ? ""
         : ` data-kanban-value="${escapeHtml(column.writeValue)}"`;
       return `
-        <section class="kanban-column group-${escapeHtml(slug)}"${writeAttr}>
+        <section class="kanban-column group-${escapeHtml(slug)}" data-kanban-key="${escapeHtml(column.key)}"${writeAttr}>
           <div class="kanban-column-header">
             <span>${escapeHtml(column.label)}</span>
             <span class="pill">${groupRows.length}</span>
@@ -1111,6 +1270,8 @@ function renderKanban(rows) {
       `;
     })
     .join("");
+
+  reconcileOrderInspector();
 }
 
 function render(rows) {
@@ -1183,9 +1344,14 @@ function setView(nextView) {
   searchEl.value = "";
 
   const isKanban = Boolean(VIEW_MODES[currentView]?.kanban);
+  document.body.dataset.view = currentView;
+  jobsTableShell.hidden = isKanban;
   jobsTable.hidden = isKanban;
+  kanbanWorkspace.hidden = !isKanban;
   kanbanEl.hidden = !isKanban;
+  listLegend.hidden = isKanban;
   mainFlowActions.hidden = currentView !== "mainFlow";
+  if (!isKanban) closeOrderInspector();
   tbody.innerHTML = `<tr><td colspan="12" class="muted">Loading…</td></tr>`;
   kanbanEl.innerHTML = "";
 
@@ -1296,6 +1462,8 @@ function cleanupPointerDrag({ shouldMove = false, clientX = 0, clientY = 0 } = {
   state.ghost?.remove();
   clearKanbanDragOver();
 
+  if (state.active) suppressKanbanSelectionUntil = Date.now() + 350;
+
   if (!shouldMove || !state.active) return;
 
   const column = state.overColumn || columnAtPoint(clientX, clientY);
@@ -1368,12 +1536,13 @@ function handleJobsClick(e) {
     return;
   }
 
-  if (e.target.classList.contains("product-in")) {
-    const row = rowForTarget(e.target);
+  if (e.target.closest(".product-in")) {
+    const btn = e.target.closest(".product-in");
+    const row = rowForTarget(btn);
     const id = row?.id;
     if (!id) return;
 
-    e.target.disabled = true;
+    btn.disabled = true;
     setError("");
     fetch("/api/status", {
       method: "POST",
@@ -1389,17 +1558,18 @@ function handleJobsClick(e) {
         alert("Product in failed. See error above.");
       })
       .finally(() => {
-        e.target.disabled = false;
+        btn.disabled = false;
       });
     return;
   }
 
-  if (e.target.classList.contains("start")) {
-    const row = rowForTarget(e.target);
+  if (e.target.closest(".start")) {
+    const btn = e.target.closest(".start");
+    const row = rowForTarget(btn);
     const id = row?.id;
     if (!id) return;
 
-    e.target.disabled = true;
+    btn.disabled = true;
     setError("");
     fetch("/api/status", {
       method: "POST",
@@ -1415,17 +1585,18 @@ function handleJobsClick(e) {
         alert("Start failed. See error above.");
       })
       .finally(() => {
-        e.target.disabled = false;
+        btn.disabled = false;
       });
     return;
   }
 
-  if (e.target.classList.contains("ready-sent")) {
-    const row = rowForTarget(e.target);
+  if (e.target.closest(".ready-sent")) {
+    const btn = e.target.closest(".ready-sent");
+    const row = rowForTarget(btn);
     const id = row?.id;
     if (!id) return;
 
-    const action = String(e.target.dataset.action || "").trim().toLowerCase();
+    const action = String(btn.dataset.action || "").trim().toLowerCase();
     const status = action === "ready"
       ? "Finished North"
       : action === "sent"
@@ -1434,7 +1605,7 @@ function handleJobsClick(e) {
 
     if (!status) return;
 
-    e.target.disabled = true;
+    btn.disabled = true;
     setError("");
     fetch("/api/status", {
       method: "POST",
@@ -1450,7 +1621,7 @@ function handleJobsClick(e) {
         alert("Status update failed. See error above.");
       })
       .finally(() => {
-        e.target.disabled = false;
+        btn.disabled = false;
       });
     return;
   }
@@ -1486,10 +1657,28 @@ function handleJobsClick(e) {
     return;
   }
 
-  
+  if (currentView === "mainFlow" && Date.now() >= suppressKanbanSelectionUntil) {
+    const card = e.target.closest(".kanban-card");
+    const isInteractive = e.target.closest("a, button, input, select, textarea, .kanban-drag-handle");
+    if (card && !isInteractive) {
+      const row = rowForTarget(card);
+      if (row) selectOrderInspector(row);
+    }
+  }
 }
 tbody.addEventListener("click", handleJobsClick);
 kanbanEl.addEventListener("click", handleJobsClick);
+orderInspector.addEventListener("click", handleJobsClick);
+orderInspectorClose.addEventListener("click", closeOrderInspector);
+kanbanEl.addEventListener("keydown", (e) => {
+  if (e.key !== "Enter" && e.key !== " ") return;
+  const card = e.target.closest(".kanban-card");
+  if (!card || e.target !== card) return;
+
+  e.preventDefault();
+  const row = rowForTarget(card);
+  if (row) selectOrderInspector(row);
+});
 kanbanEl.addEventListener("pointerdown", (e) => {
   const handle = e.target.closest(".kanban-drag-handle");
   const card = e.target.closest(".kanban-card");
@@ -1559,6 +1748,7 @@ kanbanEl.addEventListener("dragend", (e) => {
   const card = e.target.closest(".kanban-card");
   if (card) card.classList.remove("dragging");
   draggedKanbanId = null;
+  suppressKanbanSelectionUntil = Date.now() + 350;
   clearKanbanDragOver();
 });
 kanbanEl.addEventListener("dragover", (e) => {
@@ -1578,6 +1768,7 @@ kanbanEl.addEventListener("drop", (e) => {
   if (!column) return;
 
   e.preventDefault();
+  suppressKanbanSelectionUntil = Date.now() + 350;
   column.classList.remove("drag-over");
   const recordId = e.dataTransfer.getData("text/plain") || draggedKanbanId;
   if (!recordId) return;
