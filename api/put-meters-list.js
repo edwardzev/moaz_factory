@@ -8,11 +8,6 @@ const PUT_METERS_FILTER_FORMULA = [
   "LEN({Meters} & '') = 0",
   ")",
 ].join("");
-const AIRTABLE_LOCALE_PARAMS = {
-  cellFormat: "string",
-  timeZone: "UTC",
-  userLocale: "en-us",
-};
 const ORDER_FIELD_ORDER = [
   "Impressions",
   "Client name text",
@@ -102,7 +97,6 @@ export default async function handler(req, res) {
       view: FINANCE_CHECK_VIEW_NAME,
       filterByFormula: PUT_METERS_FILTER_FORMULA,
       pageSize: "100",
-      ...AIRTABLE_LOCALE_PARAMS,
     });
     for (const field of FIELDS) params.append("fields[]", field);
     if (offset) params.set("offset", offset);
