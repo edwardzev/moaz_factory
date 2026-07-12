@@ -1325,12 +1325,21 @@ a.job-open {
   display: grid;
   place-items: center;
   padding: 18px;
+  background-color: #cbd5e1;
+  background-image:
+    linear-gradient(45deg, #f1f5f9 25%, transparent 25%),
+    linear-gradient(-45deg, #f1f5f9 25%, transparent 25%),
+    linear-gradient(45deg, transparent 75%, #f1f5f9 75%),
+    linear-gradient(-45deg, transparent 75%, #f1f5f9 75%);
+  background-position: 0 0, 0 10px, 10px -10px, -10px 0;
+  background-size: 20px 20px;
 }
 
 .modal-backdrop[data-mode="attachment"] .modal-body > img {
   max-width: 100%;
   max-height: calc(88vh - 112px);
   object-fit: contain;
+  filter: drop-shadow(0 2px 2px rgba(15, 23, 42, 0.36));
 }
 
 .modal-backdrop[data-mode="put-meters"] .modal {
@@ -1474,7 +1483,14 @@ a.job-open {
   padding: 8px;
   border: 1px solid var(--border);
   border-radius: 8px;
-  background: #fff;
+  background-color: #64748b;
+  background-image:
+    linear-gradient(45deg, #94a3b8 25%, transparent 25%),
+    linear-gradient(-45deg, #94a3b8 25%, transparent 25%),
+    linear-gradient(45deg, transparent 75%, #94a3b8 75%),
+    linear-gradient(-45deg, transparent 75%, #94a3b8 75%);
+  background-position: 0 0, 0 8px, 8px -8px, -8px 0;
+  background-size: 16px 16px;
 }
 
 .attachment-preview img {
@@ -1482,6 +1498,8 @@ a.job-open {
   max-height: 150px;
   object-fit: contain;
   border: 0 !important;
+  background: transparent;
+  filter: drop-shadow(0 1px 1px rgba(15, 23, 42, 0.34));
 }
 
 .attachment-links {
