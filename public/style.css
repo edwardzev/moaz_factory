@@ -1533,6 +1533,25 @@ a.job-open {
   flex-wrap: wrap;
 }
 
+.put-meters-order-open {
+  min-height: 0;
+  padding: 4px 8px;
+  border-color: var(--border);
+  border-radius: 999px;
+  background: #fff;
+  color: var(--accent);
+  font-size: 12px;
+  line-height: 1;
+}
+
+.put-meters-order-open:hover {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--accent-strong);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
 .put-meters-title {
   color: #172033;
   font-weight: 720;

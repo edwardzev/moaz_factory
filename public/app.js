@@ -543,7 +543,12 @@ function renderPutMetersList(rows) {
   const rowHtml = (row) => `
     <article class="put-meters-row" data-id="${escapeHtml(row.id)}">
       <div class="put-meters-row-head">
-        <span class="pill put-meters-job">${escapeHtml(row.jobId ?? "")}</span>
+        <button
+          type="button"
+          class="pill put-meters-job put-meters-order-open"
+          data-record-id="${escapeHtml(row.id)}"
+          aria-label="Open order ${escapeHtml(row.jobId ?? "")}"
+        >${escapeHtml(row.jobId ?? "")}</button>
         <span class="pill">${escapeHtml(displayPutMetersMaterialOnlyValue(row.materialOnlyPress))}</span>
       </div>
       <div class="put-meters-title">${escapeHtml(row.jobName ?? "")}</div>
@@ -836,6 +841,16 @@ async function openOrderModalByRecordId(recordId) {
   openOrderModal(row);
 }
 
+function openPutMetersOrder(recordId) {
+  if (!recordId) return;
+
+  setError("");
+  openOrderModalByRecordId(recordId).catch((err) => {
+    setError(err?.message || String(err));
+    alert("Failed to open order. See error above.");
+  });
+}
+
 function closeViewer() {
   viewerBackdrop.style.display = "none";
   viewerBackdrop.setAttribute("aria-hidden", "true");
@@ -852,17 +867,18 @@ function orderEditorRootForTarget(target) {
 function handleOrderSurfaceClick(e) {
   if (e.target === viewerBackdrop) closeViewer();
 
+  const putMetersOrderTrigger = e.target.closest(".put-meters-order-open");
+  if (putMetersOrderTrigger) {
+    e.preventDefault();
+    openPutMetersOrder(putMetersOrderTrigger.dataset.recordId || "");
+    return;
+  }
+
   if (e.target.closest(".put-meters-row") && !e.target.closest(".put-meters-editor, input, button, select, textarea")) {
     const rowEl = e.target.closest(".put-meters-row");
     const recordId = rowEl?.dataset?.id || "";
-    if (!recordId) return;
-
     e.preventDefault();
-    setError("");
-    openOrderModalByRecordId(recordId).catch((err) => {
-      setError(err?.message || String(err));
-      alert("Failed to open order. See error above.");
-    });
+    openPutMetersOrder(recordId);
     return;
   }
 
