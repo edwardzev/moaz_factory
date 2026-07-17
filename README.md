@@ -29,3 +29,12 @@ Then run the app at the root of the repository:
 ```bash
 vercel dev
 ```
+
+## Mobile home-screen app
+
+The production tracker exposes a web app manifest and standalone display metadata for Android and iOS home-screen installation.
+
+- Android/Chrome: open the deployed HTTPS URL and choose **Install app** or **Add to Home screen**.
+- iPhone/iPad/Safari: open the deployed HTTPS URL, choose **Share**, then **Add to Home Screen**.
+
+The installed app still requires network access for current Airtable data and operational actions. Its service worker caches only the static application shell; `/api/*` requests are always sent to the network and are never served from cache.

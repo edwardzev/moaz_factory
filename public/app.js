@@ -1801,5 +1801,13 @@ listViewBtn.addEventListener("click", () => setView("list"));
 mainFlowViewBtn.addEventListener("click", () => setView("mainFlow"));
 putMetersBtn.addEventListener("click", openPutMetersModal);
 
+if ("serviceWorker" in navigator) {
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register("/sw.js", { scope: "/" }).catch((error) => {
+      console.warn("Service worker registration failed", error);
+    });
+  });
+}
+
 // Init
 load();
