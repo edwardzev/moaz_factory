@@ -1012,6 +1012,31 @@ a.job-open {
   overflow-wrap: anywhere;
 }
 
+.kanban-timestamp {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  color: #64748b;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.35;
+}
+
+.kanban-created {
+  margin-top: 4px;
+}
+
+.kanban-main-flow-entered {
+  margin-top: 10px;
+  padding-top: 9px;
+  border-top: 1px solid var(--border);
+}
+
+.kanban-timestamp-label {
+  color: var(--muted);
+  font-weight: 650;
+}
+
 .kanban-card-identity {
   display: grid;
   gap: 3px;

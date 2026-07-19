@@ -354,6 +354,47 @@ function fmtDeadline(v) {
   return `<time datetime="${escapeHtml(raw)}" title="${escapeHtml(raw)}">${escapeHtml(formatted)}</time>`;
 }
 
+const CARD_TIMESTAMP_FORMATTER = new Intl.DateTimeFormat("en-GB", {
+  timeZone: "Asia/Jerusalem",
+  hourCycle: "h23",
+  hour: "2-digit",
+  minute: "2-digit",
+  day: "2-digit",
+  month: "2-digit",
+  year: "2-digit",
+});
+
+function formatCardTimestamp(value) {
+  if (!value) return "";
+
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+
+  const parts = Object.fromEntries(
+    CARD_TIMESTAMP_FORMATTER
+      .formatToParts(date)
+      .filter((part) => part.type !== "literal")
+      .map((part) => [part.type, part.value])
+  );
+
+  return `${parts.hour}:${parts.minute} ${parts.day}.${parts.month}.${parts.year}`;
+}
+
+function kanbanTimestamp({ label, value, className }) {
+  const raw = String(value ?? "").trim();
+  const formatted = formatCardTimestamp(raw);
+  const timestamp = formatted
+    ? `<time datetime="${escapeHtml(raw)}">${escapeHtml(formatted)}</time>`
+    : '<span class="muted">—</span>';
+
+  return `
+    <div class="kanban-timestamp ${className}">
+      <span class="kanban-timestamp-label">${escapeHtml(label)}</span>
+      ${timestamp}
+    </div>
+  `;
+}
+
 function readOnlyTextValue(v) {
   if (v === null || v === undefined) return "";
   if (Array.isArray(v)) return v.filter(item => item !== null && item !== undefined && item !== "").join(", ");
@@ -1246,6 +1287,7 @@ function renderKanban(rows) {
         ${displayMethod(row.method).trim() ? `<span class="pill">${escapeHtml(displayMethod(row.method))}</span>` : ""}
       </div>
       <div class="kanban-title">${escapeHtml(row.jobName ?? "")}</div>
+      ${kanbanTimestamp({ label: "Created", value: row.createdAt, className: "kanban-created" })}
       <div class="kanban-card-identity">
         <div class="kanban-label">Client</div>
         <div class="kanban-value">${displayCardTextValue(row.clientNameText)}</div>
@@ -1263,6 +1305,7 @@ function renderKanban(rows) {
         <dd>${row.meters != null ? escapeHtml(row.meters) : '<span class="muted">—</span>'}</dd>
       </dl>
       <div class="kanban-mockups">${kanbanMockupsCell(row.mockup)}</div>
+      ${kanbanTimestamp({ label: "From", value: row.mainFlowLastModifiedAt, className: "kanban-main-flow-entered" })}
     </article>
   `;
 

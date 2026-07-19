@@ -4,6 +4,7 @@ const OUTSOURCE_NORTH_VIEW_ID = "viwRkYqu8uDdjkNK0";
 const PRIORITY_VIEW_NAME = "Priority";
 const MAIN_FLOW_VIEW_NAME = "Main Flow";
 const MAIN_FLOW_FIELD_NAME = "Main Flow";
+const MAIN_FLOW_LAST_MODIFIED_FIELD_NAME = "Last Modified MF";
 const OUTSOURCE_NORTH_NOT_EMPTY_FORMULA = "LEN({Outsource North} & '') > 0";
 const AIRTABLE_LOCALE_PARAMS = {
   cellFormat: "string",
@@ -66,6 +67,28 @@ async function fetchManagerTextByRecordId(airtableParams, headers) {
   );
 }
 
+async function fetchMainFlowLastModifiedByRecordId(airtableParams, headers) {
+  const params = new URLSearchParams(airtableParams);
+  // Keep this read in JSON mode so Airtable returns an unambiguous ISO timestamp.
+  // The primary request remains string-formatted for the existing row contract.
+  params.set("cellFormat", "json");
+  params.set("timeZone", "UTC");
+  params.append("fields[]", MAIN_FLOW_LAST_MODIFIED_FIELD_NAME);
+
+  const url = `https://api.airtable.com/v0/${BASE_ID}/${TABLE_ID}?${params.toString()}`;
+  const response = await fetch(url, { headers });
+
+  if (!response.ok) return new Map();
+
+  const data = await response.json();
+  return new Map(
+    (data.records || []).map(rec => [
+      rec.id,
+      rec.fields?.[MAIN_FLOW_LAST_MODIFIED_FIELD_NAME] ?? "",
+    ])
+  );
+}
+
 export default async function handler(req, res) {
   const requestUrl = new URL(req.url, "http://localhost");
   const requestedView = String(requestUrl.searchParams.get("view") || "").trim().toLowerCase();
@@ -92,7 +115,12 @@ export default async function handler(req, res) {
     return res.status(r.status).json(data);
   }
 
-  const managerTextByRecordId = await fetchManagerTextByRecordId(airtableParams, headers);
+  const [managerTextByRecordId, mainFlowLastModifiedByRecordId] = await Promise.all([
+    fetchManagerTextByRecordId(airtableParams, headers),
+    requestedView === "main-flow"
+      ? fetchMainFlowLastModifiedByRecordId(airtableParams, headers)
+      : Promise.resolve(new Map()),
+  ]);
 
   res.json(
     data.records.map(rec => {
@@ -107,6 +135,8 @@ export default async function handler(req, res) {
         outsourceNorth: rec.fields["Outsource North"] ?? "",
         printerNumber: rec.fields["Printer number"] ?? "",
         mainFlow: rec.fields[MAIN_FLOW_FIELD_NAME] ?? "",
+        createdAt: rec.createdTime ?? "",
+        mainFlowLastModifiedAt: mainFlowLastModifiedByRecordId.get(rec.id) ?? "",
         printer: rec.fields["Printer"] ?? "",
         status: rec.fields["Status"] ?? "",
         productsOrdered: rec.fields["Products Ordered"] ?? false,
