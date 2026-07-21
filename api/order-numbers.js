@@ -6,6 +6,7 @@ const EDITABLE_NUMBER_FIELDS = new Set([
   "Number 2",
   "Number 3",
   "Number 4",
+  "Number 5",
 ]);
 
 function parseNullableNumber(value, label) {

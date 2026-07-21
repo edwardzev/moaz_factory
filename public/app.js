@@ -67,6 +67,9 @@ const ORDER_FIELD_ORDER = [
   "Graphic 4",
   "Width 4 cm",
   "Number 4",
+  "Graphic 5",
+  "Width 5",
+  "Number 5",
   "Dropbox link",
   "Manager Field",
   "Carton IN",
@@ -89,6 +92,7 @@ const EDITABLE_ORDER_NUMBER_FIELDS = new Set([
   "Number 2",
   "Number 3",
   "Number 4",
+  "Number 5",
 ]);
 
 const ORDER_SECTION_STARTS = new Map([
