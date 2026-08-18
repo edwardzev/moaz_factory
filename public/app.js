@@ -9,8 +9,13 @@ const kanbanEl = document.getElementById("kanban");
 const kanbanWorkspace = document.getElementById("kanbanWorkspace");
 const listViewBtn = document.getElementById("listViewBtn");
 const mainFlowViewBtn = document.getElementById("mainFlowViewBtn");
+const materialsViewBtn = document.getElementById("materialsViewBtn");
+const materialsView = document.getElementById("materialsView");
+const materialsTbody = document.getElementById("materialsTbody");
 const listLegend = document.getElementById("listLegend");
 const mainFlowActions = document.getElementById("mainFlowActions");
+const materialsActions = document.getElementById("materialsActions");
+const addMaterialOrderBtn = document.getElementById("addMaterialOrderBtn");
 const putMetersBtn = document.getElementById("putMetersBtn");
 const putMetersBadge = document.getElementById("putMetersBadge");
 const orderInspector = document.getElementById("orderInspector");
@@ -28,6 +33,9 @@ let currentView = "list";
 let putMetersRows = [];
 let selectedInspectorId = null;
 let suppressKanbanSelectionUntil = 0;
+let materialDirectionOptions = [];
+let materialItemOptions = [];
+const materialUpdateInFlight = new Set();
 
 const VIEW_MODES = {
   list: {
@@ -41,6 +49,10 @@ const VIEW_MODES = {
     updateEndpoint: "/api/main-flow",
     valueField: "mainFlow",
     bodyField: "mainFlow",
+  },
+  materials: {
+    label: "Materials",
+    endpoint: "/api/materials",
   },
 };
 
@@ -1337,7 +1349,282 @@ function renderKanban(rows) {
   reconcileOrderInspector();
 }
 
+function formatCreatedDisplayValue(value) {
+  const text = String(value ?? "").trim();
+  const match = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::\d{2}(?:\.\d+)?)?(?:Z|[+-]\d{2}:\d{2})?$/u.exec(text);
+  if (!match) return text;
+  const [, year, month, day, hour, minute] = match;
+  return `${hour}:${minute} ${day}.${month}.${year.slice(-2)}`;
+}
+
+function renderMaterialsTable(rows) {
+  if (!rows.length) {
+    materialsTbody.innerHTML = `<tr><td colspan="7" class="muted">No records</td></tr>`;
+    return;
+  }
+
+  const cell = (value) => {
+    const text = String(value ?? "");
+    return text ? `<bdi dir="auto">${escapeHtml(text)}</bdi>` : `<span class="muted">—</span>`;
+  };
+  const itemText = (items) => (Array.isArray(items)
+    ? items.map((item) => item?.name || item?.id || "").filter(Boolean).join(", ")
+    : "");
+  const directionOptions = (currentValue) => Array.from(new Set([
+    "",
+    ...materialDirectionOptions,
+    String(currentValue ?? ""),
+  ])).map((value) => `
+    <option value="${escapeHtml(value)}" ${String(currentValue ?? "") === value ? "selected" : ""}>
+      ${value ? escapeHtml(value) : "-- Select --"}
+    </option>
+  `).join("");
+  const numberInput = (field, value) => `
+    <input
+      class="materials-number-input"
+      data-material-field="${escapeHtml(field)}"
+      type="number"
+      step="1"
+      value="${value === null || value === undefined ? "" : escapeHtml(value)}"
+      aria-label="${escapeHtml(field)}"
+    />
+  `;
+
+  materialsTbody.innerHTML = rows.map((row) => `
+    <tr data-id="${escapeHtml(row.id)}">
+      <td class="right materials-readonly" title="Airtable system field (read-only)">${cell(row.recordNumber)}</td>
+      <td class="materials-readonly" title="Airtable system field (read-only)">${cell(formatCreatedDisplayValue(row.created))}</td>
+      <td>
+        <select class="materials-select" data-material-field="direction" aria-label="direction">
+          ${directionOptions(row.direction)}
+        </select>
+      </td>
+      <td>
+        <button class="materials-items-edit" type="button" aria-label="Edit Item">
+          <span dir="auto">${escapeHtml(itemText(row.items) || "No items")}</span>
+          <i class="ph ph-pencil-simple" aria-hidden="true"></i>
+        </button>
+      </td>
+      <td class="right">${numberInput("Qty", row.qty)}</td>
+      <td class="right">${numberInput("Agent price", row.agentPrice)}</td>
+      <td class="right">${numberInput("Customer price", row.customerPrice)}</td>
+    </tr>
+  `).join("");
+}
+
+function materialCreateDirectionOptions() {
+  return ["", ...materialDirectionOptions].map((value) => `
+    <option value="${escapeHtml(value)}">${value ? escapeHtml(value) : "-- Select --"}</option>
+  `).join("");
+}
+
+function materialItemCheckboxOptions(items = materialItemOptions, selectedIds = new Set()) {
+  if (!items.length) return `<div class="muted">No items</div>`;
+  return items.map((item) => {
+    const name = String(item?.name || item?.id || "");
+    return `
+      <label class="materials-item-option" data-material-item-search="${escapeHtml(name.toLowerCase())}">
+        <input type="checkbox" value="${escapeHtml(item.id)}" ${selectedIds.has(item.id) ? "checked" : ""} />
+        <span dir="auto">${escapeHtml(name)}</span>
+      </label>
+    `;
+  }).join("");
+}
+
+function optionalMaterialInteger(input, label) {
+  const raw = input?.value?.trim() || "";
+  if (!raw) return null;
+  const value = Number(raw);
+  if (!Number.isFinite(value) || !Number.isInteger(value)) {
+    throw new Error(`Enter a whole number for ${label}`);
+  }
+  return value;
+}
+
+function wireMaterialItemSearch(root) {
+  const searchInput = root.querySelector(".materials-items-search input");
+  searchInput?.addEventListener("input", () => {
+    const query = searchInput.value.trim().toLowerCase();
+    root.querySelectorAll("[data-material-item-search]").forEach((option) => {
+      option.hidden = Boolean(query) && !option.dataset.materialItemSearch.includes(query);
+    });
+  });
+  return searchInput;
+}
+
+function openMaterialCreateDialog() {
+  viewerTitle.textContent = "New order";
+  viewerBackdrop.dataset.mode = "materials-create";
+  viewerBody.innerHTML = `
+    <form class="materials-create-form">
+      <div class="materials-create-grid">
+        <label class="materials-create-field">
+          <span>direction</span>
+          <select name="direction" aria-label="direction">${materialCreateDirectionOptions()}</select>
+        </label>
+        <label class="materials-create-field">
+          <span>Qty</span>
+          <input name="qty" type="number" step="1" inputmode="numeric" aria-label="Qty" />
+        </label>
+        <label class="materials-create-field">
+          <span>Agent price</span>
+          <input name="agentPrice" type="number" step="1" inputmode="numeric" aria-label="Agent price" />
+        </label>
+        <label class="materials-create-field">
+          <span>Customer price</span>
+          <input name="customerPrice" type="number" step="1" inputmode="numeric" aria-label="Customer price" />
+        </label>
+        <div class="materials-create-field materials-create-items">
+          <span>Item</span>
+          <label class="materials-items-search">
+            <i class="ph ph-magnifying-glass" aria-hidden="true"></i>
+            <input type="search" placeholder="Search items…" aria-label="Search items" />
+          </label>
+          <div class="materials-item-options" role="group" aria-label="Item">
+            ${materialItemCheckboxOptions()}
+          </div>
+        </div>
+      </div>
+      <div class="materials-create-error" role="alert" aria-live="polite"></div>
+      <div class="materials-create-actions">
+        <button class="materials-create-cancel" type="button">Cancel</button>
+        <button class="materials-create-submit" type="submit">Create order</button>
+      </div>
+    </form>
+  `;
+  viewerBackdrop.style.display = "flex";
+  viewerBackdrop.setAttribute("aria-hidden", "false");
+
+  const form = viewerBody.querySelector(".materials-create-form");
+  const errorBox = viewerBody.querySelector(".materials-create-error");
+  const submitButton = viewerBody.querySelector(".materials-create-submit");
+  wireMaterialItemSearch(viewerBody);
+  viewerBody.querySelector(".materials-create-cancel")?.addEventListener("click", closeViewer);
+  viewerBody.querySelector("select[name=direction]")?.focus();
+
+  form?.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    submitButton.disabled = true;
+    errorBox.textContent = "";
+    setError("");
+    setStatus("Creating order…");
+    try {
+      const fields = {
+        direction: form.elements.direction.value || null,
+        Item: Array.from(form.querySelectorAll(".materials-item-option input:checked")).map((input) => input.value),
+        Qty: optionalMaterialInteger(form.elements.qty, "Qty"),
+        "Agent price": optionalMaterialInteger(form.elements.agentPrice, "Agent price"),
+        "Customer price": optionalMaterialInteger(form.elements.customerPrice, "Customer price"),
+      };
+      const response = await fetch("/api/materials", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ fields }),
+      });
+      if (!response.ok) throw new Error(`POST /api/materials failed (${response.status})\n${await response.text()}`);
+      const data = await response.json();
+      if (!data?.record?.id) throw new Error("Save failed. See error above.");
+      closeViewer();
+      await load();
+      setStatus("Order added");
+    } catch (error) {
+      const message = error?.message || String(error);
+      setStatus("Error");
+      setError(message);
+      errorBox.textContent = message;
+      submitButton.disabled = false;
+    }
+  });
+}
+
+function setMaterialsRowBusy(recordId, busy) {
+  const row = materialsTbody.querySelector(`tr[data-id="${recordId}"]`);
+  if (!row) return;
+  row.classList.toggle("materials-saving", busy);
+  row.querySelectorAll("button, input, select").forEach((control) => {
+    control.disabled = busy;
+  });
+}
+
+async function saveMaterialFields(recordId, fields) {
+  if (!recordId || materialUpdateInFlight.has(recordId)) return false;
+  materialUpdateInFlight.add(recordId);
+  setMaterialsRowBusy(recordId, true);
+  setError("");
+  setStatus("Saving Materials…");
+  try {
+    const response = await fetch("/api/materials", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id: recordId, fields }),
+    });
+    if (!response.ok) throw new Error(`PATCH /api/materials failed (${response.status})\n${await response.text()}`);
+    const data = await response.json();
+    if (!data?.record?.id) throw new Error("Save failed. See error above.");
+    const itemNames = new Map(materialItemOptions.map((item) => [item.id, item.name]));
+    data.record.items = Array.isArray(data.record.items)
+      ? data.record.items.map((item) => ({ ...item, name: itemNames.get(item.id) || item.name || item.id }))
+      : [];
+    const index = allRows.findIndex((row) => row.id === data.record.id);
+    if (index >= 0) allRows[index] = data.record;
+    setStatus("Saved");
+    return true;
+  } catch (error) {
+    setStatus("Error");
+    setError(error?.message || String(error));
+    return false;
+  } finally {
+    materialUpdateInFlight.delete(recordId);
+    applyFilter();
+  }
+}
+
+function openMaterialItemsEditor(recordId) {
+  const row = allRows.find((item) => item.id === recordId);
+  if (!row) return;
+  const currentItems = Array.isArray(row.items) ? row.items : [];
+  const selectedIds = new Set(currentItems.map((item) => item?.id).filter(Boolean));
+  const optionsById = new Map(materialItemOptions.map((item) => [item.id, item]));
+  currentItems.forEach((item) => {
+    if (item?.id && !optionsById.has(item.id)) optionsById.set(item.id, item);
+  });
+
+  viewerTitle.textContent = `Item — #${row.recordNumber ?? ""}`;
+  viewerBackdrop.dataset.mode = "materials-items";
+  viewerBody.innerHTML = `
+    <div class="materials-items-editor">
+      <label class="materials-items-search">
+        <i class="ph ph-magnifying-glass" aria-hidden="true"></i>
+        <input type="search" placeholder="Search items…" aria-label="Search items" />
+      </label>
+      <div class="materials-item-options" role="group" aria-label="Item">
+        ${materialItemCheckboxOptions(Array.from(optionsById.values()), selectedIds)}
+      </div>
+      <div class="materials-editor-actions">
+        <button class="materials-items-save" type="button">Save</button>
+      </div>
+    </div>
+  `;
+  viewerBackdrop.style.display = "flex";
+  viewerBackdrop.setAttribute("aria-hidden", "false");
+  wireMaterialItemSearch(viewerBody)?.focus();
+
+  const saveButton = viewerBody.querySelector(".materials-items-save");
+  saveButton?.addEventListener("click", async () => {
+    saveButton.disabled = true;
+    const itemIds = Array.from(viewerBody.querySelectorAll(".materials-item-option input:checked"))
+      .map((input) => input.value);
+    const saved = await saveMaterialFields(recordId, { Item: itemIds });
+    if (saved) closeViewer();
+    else saveButton.disabled = false;
+  });
+}
+
 function render(rows) {
+  if (currentView === "materials") {
+    renderMaterialsTable(rows);
+    return;
+  }
   if (VIEW_MODES[currentView]?.kanban) {
     renderKanban(rows);
     return;
@@ -1349,7 +1636,23 @@ function render(rows) {
 function applyFilter() {
   const q = searchEl.value.trim();
   if (!q) return render(allRows);
-  const filtered = allRows.filter(r => String(r.jobId || "").includes(q));
+  const normalizedQuery = q.toLowerCase();
+  const filtered = currentView === "materials"
+    ? allRows.filter((row) => {
+        const values = [
+          row.recordNumber,
+          row.created,
+          formatCreatedDisplayValue(row.created),
+          row.direction,
+          ...(Array.isArray(row.items) ? row.items.flatMap((item) => [item?.id, item?.name]) : []),
+          row.qty,
+          row.agentPrice,
+          row.customerPrice,
+        ].map((value) => String(value ?? "").toLowerCase());
+        return normalizedQuery.split(/\s+/).filter(Boolean)
+          .every((term) => values.some((value) => value.includes(term)));
+      })
+    : allRows.filter(r => String(r.jobId || "").includes(q));
   render(filtered);
 }
 
@@ -1383,14 +1686,23 @@ async function load() {
       throw new Error(`GET ${viewConfig.endpoint} failed (${r.status})\n${t}`);
     }
     const data = await r.json();
-    allRows = VIEW_MODES[currentView]?.kanban ? data : sortListRows(data);
+    if (currentView === "materials") {
+      if (!Array.isArray(data?.records)) throw new Error("Materials response is missing records.");
+      allRows = data.records;
+      materialDirectionOptions = Array.isArray(data?.options?.directions) ? data.options.directions : [];
+      materialItemOptions = Array.isArray(data?.options?.items) ? data.options.items : [];
+    } else {
+      allRows = VIEW_MODES[currentView]?.kanban ? data : sortListRows(data);
+    }
     applyFilter();
     setStatus(`Loaded ${allRows.length} records`);
     if (currentView === "mainFlow") refreshPutMetersBadge();
   } catch (e) {
     setStatus("Error");
     setError(e?.message || String(e));
-    if (VIEW_MODES[currentView]?.kanban) {
+    if (currentView === "materials") {
+      materialsTbody.innerHTML = `<tr><td colspan="7" class="muted">Failed to load</td></tr>`;
+    } else if (VIEW_MODES[currentView]?.kanban) {
       kanbanEl.innerHTML = `<div class="muted">Failed to load</div>`;
     } else {
       tbody.innerHTML = `<tr><td colspan="12" class="muted">Failed to load</td></tr>`;
@@ -1407,21 +1719,28 @@ function setView(nextView) {
   searchEl.value = "";
 
   const isKanban = Boolean(VIEW_MODES[currentView]?.kanban);
+  const isMaterials = currentView === "materials";
   document.body.dataset.view = currentView;
-  jobsTableShell.hidden = isKanban;
-  jobsTable.hidden = isKanban;
+  jobsTableShell.hidden = isKanban || isMaterials;
+  jobsTable.hidden = isKanban || isMaterials;
+  materialsView.hidden = !isMaterials;
   kanbanWorkspace.hidden = !isKanban;
   kanbanEl.hidden = !isKanban;
-  listLegend.hidden = isKanban;
+  listLegend.hidden = isKanban || isMaterials;
   mainFlowActions.hidden = currentView !== "mainFlow";
+  materialsActions.hidden = !isMaterials;
   if (!isKanban) closeOrderInspector();
   tbody.innerHTML = `<tr><td colspan="12" class="muted">Loading…</td></tr>`;
+  materialsTbody.innerHTML = `<tr><td colspan="7" class="muted">Loading…</td></tr>`;
   kanbanEl.innerHTML = "";
+  searchEl.placeholder = isMaterials ? "Search materials…" : "Search Job ID…";
 
-  listViewBtn.classList.toggle("active", !isKanban);
-  listViewBtn.setAttribute("aria-selected", String(!isKanban));
+  listViewBtn.classList.toggle("active", currentView === "list");
+  listViewBtn.setAttribute("aria-selected", String(currentView === "list"));
   mainFlowViewBtn.classList.toggle("active", currentView === "mainFlow");
   mainFlowViewBtn.setAttribute("aria-selected", String(currentView === "mainFlow"));
+  materialsViewBtn.classList.toggle("active", isMaterials);
+  materialsViewBtn.setAttribute("aria-selected", String(isMaterials));
 
   load();
 }
@@ -1846,7 +2165,33 @@ searchEl.addEventListener("input", applyFilter);
 refreshBtn.addEventListener("click", load);
 listViewBtn.addEventListener("click", () => setView("list"));
 mainFlowViewBtn.addEventListener("click", () => setView("mainFlow"));
+materialsViewBtn.addEventListener("click", () => setView("materials"));
 putMetersBtn.addEventListener("click", openPutMetersModal);
+addMaterialOrderBtn.addEventListener("click", openMaterialCreateDialog);
+materialsTbody.addEventListener("click", (event) => {
+  const button = event.target.closest(".materials-items-edit");
+  if (!button) return;
+  const recordId = button.closest("tr[data-id]")?.dataset.id || "";
+  openMaterialItemsEditor(recordId);
+});
+materialsTbody.addEventListener("change", async (event) => {
+  const control = event.target.closest("[data-material-field]");
+  if (!control) return;
+  const row = control.closest("tr[data-id]");
+  const recordId = row?.dataset.id || "";
+  const field = control.dataset.materialField;
+  let value = control.value;
+  if (control.matches("input[type=number]")) {
+    try {
+      value = optionalMaterialInteger(control, field);
+    } catch (error) {
+      setError(error?.message || String(error));
+      applyFilter();
+      return;
+    }
+  }
+  await saveMaterialFields(recordId, { [field]: value || null });
+});
 
 if ("serviceWorker" in navigator) {
   window.addEventListener("load", () => {

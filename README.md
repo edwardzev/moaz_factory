@@ -1,34 +1,29 @@
-# Express.js on Vercel
+# Moaz Factory Production Tracking
 
-Basic Express.js + Vercel example that serves html content, JSON data and simulates an api route.
+Operational production dashboard served as a static web app with Vercel API routes backed by Airtable.
 
-## How to Use
+## Local development
 
-You can choose from one of the following two methods to use this repository:
-
-### One-Click Deploy
-
-Deploy the example using [Vercel](https://vercel.com?utm_source=github&utm_medium=readme&utm_campaign=vercel-examples):
-
-[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/git/external?repository-url=https://github.com/vercel/examples/tree/main/solutions/express&project-name=express&repository-name=express)
-
-### Clone and Deploy
-
-```bash
-git clone https://github.com/vercel/examples/tree/main/solutions/express
-```
-
-Install the Vercel CLI:
-
-```bash
-npm i -g vercel
-```
-
-Then run the app at the root of the repository:
+The app expects the same Vercel environment variables used by the deployed project, including `AIRTABLE_TOKEN`.
 
 ```bash
 vercel dev
 ```
+
+## Materials
+
+The Materials tab follows the existing Ahmed Factory Materials contract while using the `North` Airtable view.
+
+- Airtable base: `appb6UW8QgmqWAl2M`
+- Outsource table: `tblxLxutIQmSKEDg9`
+- North view: `viwH3hChg9X5XidDU`
+- Items table: `tblnBdTGsk32lHpzO`
+- Item display field: `SKU`
+- Visible field order: `Record#`, `Created`, `direction`, `Item`, `Qty`, `Agent price`, `Customer price`
+- Editable fields: `direction`, `Item`, `Qty`, `Agent price`, `Customer price`
+- Read-only fields: `Record#`, `Created`
+
+The Materials tab does not have a separate password. It follows the existing Moaz Factory access model.
 
 ## Mobile home-screen app
 
