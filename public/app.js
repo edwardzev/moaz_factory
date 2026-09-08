@@ -67,6 +67,7 @@ const ORDER_FIELD_ORDER = [
   "Mock up",
   "Deadline",
   "Sample",
+  "Cut order",
   "Graphic 1",
   "Width 1 cm",
   "Number 1",
@@ -77,7 +78,7 @@ const ORDER_FIELD_ORDER = [
   "Width 3",
   "Number 3",
   "Graphic 4",
-  "Width 4 cm",
+  "Width 4",
   "Number 4",
   "Graphic 5",
   "Width 5",
@@ -446,6 +447,41 @@ function editableOrderNumberField({ recordId, fieldName, value }) {
     </div>`;
 }
 
+function labelSourceForRow(row) {
+  const recordId = row?.id;
+  if (!recordId) return "list";
+  if (currentView === "mainFlow" && allRows.some(item => item.id === recordId)) return "mainFlow";
+  if (currentView === "list" && allRows.some(item => item.id === recordId)) return "list";
+  if (putMetersRows.some(item => item.id === recordId)) return "putMeters";
+  return "list";
+}
+
+function stickerPrintAction(row, { compact = false } = {}) {
+  const recordId = String(row?.id ?? "").trim();
+  const jobId = String(row?.jobId ?? "").trim();
+  if (!recordId) return "";
+
+  const params = new URLSearchParams({
+    id: recordId,
+    source: labelSourceForRow(row),
+    autoprint: "1",
+  });
+  const className = compact ? "sticker-print sticker-print-compact" : "sticker-print";
+  const accessibleJob = jobId || recordId;
+
+  return `
+    <a
+      class="${className}"
+      href="/label.html?${escapeHtml(params.toString())}"
+      target="_blank"
+      rel="noopener noreferrer"
+      aria-label="Print sticker for order ${escapeHtml(accessibleJob)}"
+    >
+      <i class="ph ph-printer" aria-hidden="true"></i>
+      <span>Print sticker</span>
+    </a>`;
+}
+
 function attachmentsList(items, { jobId, jobName }) {
   const arr = Array.isArray(items) ? items : [];
   if (!arr.length) return `<span class="muted">—</span>`;
@@ -763,6 +799,7 @@ function renderOrderInspector(row) {
   }).join("");
 
   orderInspectorBody.innerHTML = `
+    <div class="inspector-order-actions">${stickerPrintAction(row)}</div>
     <div class="inspector-order-context" dir="auto">${escapeHtml(jobName)}</div>
     <div class="inspector-fields">${fields}</div>`;
   orderInspector.hidden = false;
@@ -871,6 +908,7 @@ function openOrderModal(row) {
 
   viewerBody.innerHTML = `
     <div class="order-sheet-scroll" data-order-sheet-scroll>
+      <div class="order-sheet-actions">${stickerPrintAction(row)}</div>
       <table class="order-sheet">
         <tbody>${lines}</tbody>
       </table>
@@ -1224,7 +1262,7 @@ document.addEventListener("keydown", (e) => {
 
 function renderTable(rows) {
   if (!rows.length) {
-    tbody.innerHTML = `<tr><td colspan="12" class="muted">No records</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="13" class="muted">No records</td></tr>`;
     return;
   }
 
@@ -1253,6 +1291,7 @@ function renderTable(rows) {
       <td>
         <button class="ready-sent" type="button" data-action="sent"><i class="ph ph-paper-plane-tilt" aria-hidden="true"></i><span>Sent</span></button>
       </td>
+      <td>${stickerPrintAction(r, { compact: true })}</td>
     </tr>
   `;
 
@@ -1266,7 +1305,7 @@ function renderTable(rows) {
       const groupClass = `group-${slug}`;
       const rowClass = `row-${slug}`;
       const header = groupLabel !== lastGroup
-        ? `<tr class="group-row ${groupClass}" data-group="${escapeHtml(key)}"><td colspan="12"><i class="ph ph-caret-down" aria-hidden="true"></i><span>${escapeHtml(groupLabel)}</span></td></tr>`
+        ? `<tr class="group-row ${groupClass}" data-group="${escapeHtml(key)}"><td colspan="13"><i class="ph ph-caret-down" aria-hidden="true"></i><span>${escapeHtml(groupLabel)}</span></td></tr>`
         : "";
       lastGroup = groupLabel;
       return header + rowHtml(r, rowClass);
@@ -1705,7 +1744,7 @@ async function load() {
     } else if (VIEW_MODES[currentView]?.kanban) {
       kanbanEl.innerHTML = `<div class="muted">Failed to load</div>`;
     } else {
-      tbody.innerHTML = `<tr><td colspan="12" class="muted">Failed to load</td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="13" class="muted">Failed to load</td></tr>`;
     }
   }
 }
@@ -1730,7 +1769,7 @@ function setView(nextView) {
   mainFlowActions.hidden = currentView !== "mainFlow";
   materialsActions.hidden = !isMaterials;
   if (!isKanban) closeOrderInspector();
-  tbody.innerHTML = `<tr><td colspan="12" class="muted">Loading…</td></tr>`;
+  tbody.innerHTML = `<tr><td colspan="13" class="muted">Loading…</td></tr>`;
   materialsTbody.innerHTML = `<tr><td colspan="7" class="muted">Loading…</td></tr>`;
   kanbanEl.innerHTML = "";
   searchEl.placeholder = isMaterials ? "Search materials…" : "Search Job ID…";

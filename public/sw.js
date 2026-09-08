@@ -1,9 +1,12 @@
 const CACHE_PREFIX = "moaz-factory-shell-";
-const CACHE_NAME = `${CACHE_PREFIX}v2`;
+const CACHE_NAME = `${CACHE_PREFIX}v3`;
 const APP_SHELL = [
   "/",
   "/app.js",
   "/style.css",
+  "/label.html",
+  "/label.js",
+  "/label.css",
   "/manifest.webmanifest",
   "/icons/icon-192.png",
   "/icons/icon-512.png",

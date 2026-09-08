@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="theme-color" content="#121b2a" />
+  <title>Sticker label - Moaz Factory</title>
+  <link rel="icon" type="image/png" sizes="192x192" href="/icons/icon-192.png" />
+  <link rel="stylesheet" href="/label.css" />
+</head>
+<body>
+  <header class="print-toolbar" data-no-print>
+    <div class="print-toolbar-copy">
+      <strong id="pageTitle">Sticker label</strong>
+      <span id="printStatus" role="status" aria-live="polite">Loading order...</span>
+    </div>
+    <div class="print-toolbar-actions">
+      <button id="printButton" type="button" disabled>Print sticker</button>
+      <button id="closeButton" class="secondary-button" type="button">Close</button>
+    </div>
+  </header>
+
+  <main class="page-stage">
+    <div id="errorPanel" class="error-panel" role="alert" hidden></div>
+    <article id="labelSheet" class="label-sheet" aria-label="Sticker label" hidden>
+      <div id="method" class="label-method" dir="auto"></div>
+      <div id="jobId" class="label-job-id"></div>
+      <div id="clientName" class="label-client" dir="auto"></div>
+      <div id="jobName" class="label-job-name" dir="auto"></div>
+      <div class="cut-order-block">
+        <span>Cut Order</span>
+        <span id="cutOrder" class="cut-order-box" aria-label="Cut order"></span>
+      </div>
+      <div id="graphicSlots"></div>
+    </article>
+  </main>
+
+  <script src="/label.js"></script>
+</body>
+</html>
