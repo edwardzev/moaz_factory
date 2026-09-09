@@ -688,10 +688,16 @@
 
   <main class="app-main">
     <section class="command-bar" aria-label="Production controls">
-      <label class="search-shell" for="search">
-        <i class="ph ph-magnifying-glass" aria-hidden="true"></i>
-        <input id="search" placeholder="Search Job ID…" autocomplete="off" />
-      </label>
+      <div class="search-tools">
+        <label class="search-shell" for="search">
+          <i class="ph ph-magnifying-glass" aria-hidden="true"></i>
+          <input id="search" placeholder="Search Job ID…" autocomplete="off" />
+        </label>
+        <button id="globalSearchBtn" class="global-search-button" type="button">
+          <i class="ph ph-globe-hemisphere-west" aria-hidden="true"></i>
+          <span>Global search</span>
+        </button>
+      </div>
       <span id="status" class="status">Idle</span>
       <div id="listLegend" class="status-legend" aria-label="Status group legend">
         <span><span class="legend-line legend-line-primary"></span>Outsource North</span>

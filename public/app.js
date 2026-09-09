@@ -2,6 +2,7 @@ const tbody = document.getElementById("tbody");
 const statusEl = document.getElementById("status");
 const errEl = document.getElementById("error");
 const searchEl = document.getElementById("search");
+const globalSearchBtn = document.getElementById("globalSearchBtn");
 const refreshBtn = document.getElementById("refreshBtn");
 const jobsTable = document.getElementById("jobsTable");
 const jobsTableShell = document.getElementById("jobsTableShell");
@@ -35,6 +36,8 @@ let selectedInspectorId = null;
 let suppressKanbanSelectionUntil = 0;
 let materialDirectionOptions = [];
 let materialItemOptions = [];
+let globalSearchAbortController = null;
+let viewerReturnFocus = null;
 const materialUpdateInFlight = new Set();
 
 const VIEW_MODES = {
@@ -450,6 +453,7 @@ function editableOrderNumberField({ recordId, fieldName, value }) {
 function labelSourceForRow(row) {
   const recordId = row?.id;
   if (!recordId) return "list";
+  if (row?.labelSource === "global") return "global";
   if (currentView === "mainFlow" && allRows.some(item => item.id === recordId)) return "mainFlow";
   if (currentView === "list" && allRows.some(item => item.id === recordId)) return "list";
   if (putMetersRows.some(item => item.id === recordId)) return "putMeters";
@@ -463,6 +467,7 @@ function stickerPrintAction(row, { compact = false } = {}) {
 
   const params = new URLSearchParams({
     id: recordId,
+    jobId,
     source: labelSourceForRow(row),
     autoprint: "1",
   });
@@ -936,6 +941,116 @@ async function openOrderModalByRecordId(recordId) {
   openOrderModal(row);
 }
 
+function setGlobalSearchMessage(message, { error = false } = {}) {
+  const messageEl = viewerBody.querySelector("#globalSearchMessage");
+  if (!messageEl) return;
+  messageEl.textContent = message || "";
+  messageEl.classList.toggle("global-search-error", Boolean(error));
+  messageEl.setAttribute("role", error ? "alert" : "status");
+}
+
+function openGlobalSearchDialog() {
+  if (currentView !== "list") return;
+
+  viewerReturnFocus = globalSearchBtn;
+  viewerTitle.textContent = "Global search";
+  viewerBackdrop.dataset.mode = "global-search";
+  viewerBody.innerHTML = `
+    <form id="globalSearchForm" class="global-search-form" novalidate>
+      <label class="global-search-field" for="globalSearchJobId">
+        <span>JOB ID</span>
+        <input
+          id="globalSearchJobId"
+          name="jobId"
+          type="text"
+          inputmode="numeric"
+          pattern="[0-9]*"
+          autocomplete="off"
+          aria-describedby="globalSearchHint globalSearchMessage"
+        />
+      </label>
+      <p id="globalSearchHint" class="global-search-hint">
+        Opens an order only when Outsource North is not empty.
+      </p>
+      <p id="globalSearchMessage" class="global-search-message" role="status" aria-live="polite"></p>
+      <div class="global-search-actions">
+        <button class="global-search-cancel" type="button">Cancel</button>
+        <button class="global-search-submit" type="submit">Open order</button>
+      </div>
+    </form>`;
+
+  viewerBackdrop.style.display = "flex";
+  viewerBackdrop.setAttribute("aria-hidden", "false");
+
+  const form = viewerBody.querySelector("#globalSearchForm");
+  const input = viewerBody.querySelector("#globalSearchJobId");
+  const cancelButton = viewerBody.querySelector(".global-search-cancel");
+  const submitButton = viewerBody.querySelector(".global-search-submit");
+
+  cancelButton?.addEventListener("click", closeViewer);
+  form?.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const jobId = String(input?.value || "").trim();
+    if (!/^[1-9]\d*$/.test(jobId) || jobId.length > 32) {
+      setGlobalSearchMessage("Enter a valid JOB ID.", { error: true });
+      input?.focus();
+      return;
+    }
+
+    globalSearchAbortController?.abort();
+    const requestController = new AbortController();
+    globalSearchAbortController = requestController;
+    form.setAttribute("aria-busy", "true");
+    input.disabled = true;
+    submitButton.disabled = true;
+    submitButton.textContent = "Searching…";
+    setGlobalSearchMessage("Searching…");
+
+    try {
+      const response = await fetch(`/api/global-search?jobId=${encodeURIComponent(jobId)}`, {
+        cache: "no-store",
+        signal: requestController.signal,
+      });
+
+      if (!response.ok) {
+        throw new Error("Search unavailable");
+      }
+
+      const data = await response.json();
+      if (data?.found === false) {
+        setGlobalSearchMessage("Order not found", { error: true });
+        return;
+      }
+      if (!data?.row?.id || String(data.row.jobId ?? "") !== jobId) {
+        throw new Error("Search unavailable");
+      }
+      if (viewerBackdrop.dataset.mode !== "global-search") return;
+
+      openOrderModal(data.row);
+      viewerClose.focus();
+    } catch (error) {
+      if (error?.name !== "AbortError") {
+        setGlobalSearchMessage("Search unavailable. Try again.", { error: true });
+      }
+    } finally {
+      if (globalSearchAbortController === requestController) {
+        globalSearchAbortController = null;
+      }
+      if (viewerBackdrop.dataset.mode === "global-search" && form.isConnected) {
+        form.removeAttribute("aria-busy");
+        input.disabled = false;
+        submitButton.disabled = false;
+        submitButton.textContent = "Open order";
+        if (viewerBody.querySelector("#globalSearchMessage")?.classList.contains("global-search-error")) {
+          input.focus();
+        }
+      }
+    }
+  });
+
+  input?.focus();
+}
+
 function openPutMetersOrder(recordId) {
   if (!recordId) return;
 
@@ -947,11 +1062,16 @@ function openPutMetersOrder(recordId) {
 }
 
 function closeViewer() {
+  globalSearchAbortController?.abort();
+  globalSearchAbortController = null;
+  const focusTarget = viewerReturnFocus;
+  viewerReturnFocus = null;
   viewerBackdrop.style.display = "none";
   viewerBackdrop.setAttribute("aria-hidden", "true");
   delete viewerBackdrop.dataset.mode;
   viewerTitle.textContent = "";
   viewerBody.innerHTML = "";
+  if (focusTarget?.isConnected) focusTarget.focus();
 }
 
 viewerClose.addEventListener("click", closeViewer);
@@ -1252,6 +1372,26 @@ function handleOrderSurfaceClick(e) {
 viewerBackdrop.addEventListener("click", handleOrderSurfaceClick);
 orderInspector.addEventListener("click", handleOrderSurfaceClick);
 document.addEventListener("keydown", (e) => {
+  if (
+    e.key === "Tab" &&
+    viewerBackdrop.style.display === "flex" &&
+    viewerBackdrop.dataset.mode === "global-search"
+  ) {
+    const focusable = Array.from(
+      viewerBackdrop.querySelectorAll("button:not(:disabled), input:not(:disabled), [href], [tabindex]:not([tabindex='-1'])")
+    ).filter(element => !element.hidden && element.getAttribute("aria-hidden") !== "true");
+    const first = focusable[0];
+    const last = focusable[focusable.length - 1];
+    if (e.shiftKey && document.activeElement === first) {
+      e.preventDefault();
+      last?.focus();
+    } else if (!e.shiftKey && document.activeElement === last) {
+      e.preventDefault();
+      first?.focus();
+    }
+    return;
+  }
+
   if (e.key !== "Escape") return;
   if (viewerBackdrop.style.display === "flex") {
     closeViewer();
@@ -1766,6 +1906,7 @@ function setView(nextView) {
   kanbanWorkspace.hidden = !isKanban;
   kanbanEl.hidden = !isKanban;
   listLegend.hidden = isKanban || isMaterials;
+  globalSearchBtn.hidden = currentView !== "list";
   mainFlowActions.hidden = currentView !== "mainFlow";
   materialsActions.hidden = !isMaterials;
   if (!isKanban) closeOrderInspector();
@@ -2201,6 +2342,7 @@ kanbanEl.addEventListener("drop", (e) => {
   moveKanbanCard(recordId, column.dataset.kanbanValue || "");
 });
 searchEl.addEventListener("input", applyFilter);
+globalSearchBtn.addEventListener("click", openGlobalSearchDialog);
 refreshBtn.addEventListener("click", load);
 listViewBtn.addEventListener("click", () => setView("list"));
 mainFlowViewBtn.addEventListener("click", () => setView("mainFlow"));

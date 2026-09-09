@@ -68,7 +68,16 @@ function fail(message) {
 function rowsFromPayload(payload) {
   if (Array.isArray(payload)) return payload;
   if (Array.isArray(payload?.rows)) return payload.rows;
+  if (payload?.row && typeof payload.row === "object") return [payload.row];
   return [];
+}
+
+function endpointForSource(source, jobId) {
+  if (source === "global") {
+    if (!/^[1-9]\d*$/.test(jobId) || jobId.length > 32) return "";
+    return `/api/global-search?jobId=${encodeURIComponent(jobId)}`;
+  }
+  return SOURCE_ENDPOINTS[source] || "";
 }
 
 function renderGraphicSlot(definition, index, order) {
@@ -194,8 +203,9 @@ async function renderLabel(row) {
 async function load() {
   const params = new URLSearchParams(window.location.search);
   const recordId = String(params.get("id") || "").trim();
+  const jobId = String(params.get("jobId") || "").trim();
   const source = String(params.get("source") || "list");
-  const endpoint = SOURCE_ENDPOINTS[source];
+  const endpoint = endpointForSource(source, jobId);
 
   if (!/^rec[A-Za-z0-9]+$/.test(recordId)) {
     fail("The sticker link is missing a valid Airtable record ID.");
