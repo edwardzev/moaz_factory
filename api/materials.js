@@ -4,6 +4,8 @@ const OUTSOURCE_VIEW_ID = "viwH3hChg9X5XidDU";
 const ITEMS_TABLE_ID = "tblnBdTGsk32lHpzO";
 const ITEMS_PRIMARY_FIELD = "SKU";
 const DIRECTION_FIELD = "direction";
+const STORAGE_FIELD = "Storage";
+const MATERIALS_STORAGE = "North";
 const VISIBLE_MATERIAL_FIELDS = [
   "Record#",
   "Created",
@@ -276,7 +278,12 @@ async function createMaterial(req, res, { fetchImpl, headers }) {
   const response = await fetchImpl(url, {
     method: "POST",
     headers: { ...headers, "Content-Type": "application/json" },
-    body: JSON.stringify({ fields }),
+    body: JSON.stringify({
+      fields: {
+        ...fields,
+        [STORAGE_FIELD]: MATERIALS_STORAGE,
+      },
+    }),
   });
   const data = await responseJson(response);
   if (!response.ok) return res.status(response.status).json(data);
