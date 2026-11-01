@@ -50,6 +50,8 @@ request-body limit; no arbitrary file-count cap is added.
 
 Submission posts the selected attachment IDs and metadata to the order's
 existing `Send sample link` Pabbly webhook with deterministic idempotency.
+An explicit `sample_assets_json` copy preserves the selected array through
+Pabbly's simple-response flattening for its media loop.
 Pabbly uses the existing PM Notifications credential through separate text/media
 relays. Platform requires an explicit managed-provider capability grant and
 privately archives the selected media before queueing. Submission acceptance

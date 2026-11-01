@@ -114,6 +114,7 @@ test("Send Sample posts only the selected Airtable assets to Pabbly", async () =
       },
     ]);
     assert.ok(!payload.sample_assets.some(asset => asset.filename === "old-file.jpg"));
+    assert.deepEqual(JSON.parse(payload.sample_assets_json), payload.sample_assets);
     assert.match(payload.approve_url, /^https:\/\/moaz\.example\/api\/sample-approve\?token=/);
     assert.match(payload.comment_url, /^https:\/\/wa\.me\/972559664485\?text=/);
   } finally {
