@@ -41,6 +41,7 @@ test("Send Sample posts only the selected Airtable assets to Pabbly", async () =
         id: "recJS7xwhFXHaoPJd",
         fields: {
           "JOB ID": "48441",
+          "Clean phone number": "972546969974",
           Sample: [
             {
               id: "attABCDEFGHIJKLMN",
@@ -117,6 +118,10 @@ test("Send Sample posts only the selected Airtable assets to Pabbly", async () =
     assert.deepEqual(JSON.parse(payload.sample_assets_json), payload.sample_assets);
     assert.match(payload.approve_url, /^https:\/\/moaz\.example\/api\/sample-approve\?token=/);
     assert.match(payload.comment_url, /^https:\/\/wa\.me\/972559664485\?text=/);
+    assert.match(payload.sample_approve_button_id, /^ms2\./);
+    assert.match(payload.sample_comment_button_id, /^ms2\./);
+    assert.notEqual(payload.sample_approve_button_id, payload.sample_comment_button_id);
+    assert.ok(Buffer.byteLength(payload.sample_approve_button_id) <= 256);
   } finally {
     globalThis.fetch = originalFetch;
     for (const [key, value] of Object.entries(originalEnv)) {

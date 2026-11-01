@@ -8,6 +8,7 @@ import {
   readAirtableRecord,
 } from "./_sample-utils.js";
 import crypto from "node:crypto";
+import { CLEAN_PHONE_FIELD_NAME, createNativeSampleButton, sampleFingerprint, sampleRecipient } from "./_native-sample-replies.js";
 
 const PABBLY_HOSTNAME = "connect.pabbly.com";
 const PM_NOTIFICATION_PHONE = "972559664485";
@@ -41,6 +42,7 @@ export default async function handler(req, res) {
       JOB_ID_FIELD_NAME,
       SAMPLE_FIELD_NAME,
       SEND_SAMPLE_LINK_FIELD_NAME,
+      CLEAN_PHONE_FIELD_NAME,
     ]);
     const fields = record?.fields || {};
     const attachments = Array.isArray(fields[SAMPLE_FIELD_NAME]) ? fields[SAMPLE_FIELD_NAME] : [];
@@ -86,6 +88,14 @@ export default async function handler(req, res) {
       .digest("hex")
       .slice(0, 32);
 
+    const replyCapability = {
+      recordId, jobId, submissionId,
+      recipientChatId: sampleRecipient(fields[CLEAN_PHONE_FIELD_NAME]),
+      fingerprint: sampleFingerprint(attachments),
+    };
+    const approveButtonId = createNativeSampleButton({ ...replyCapability, action: "approve" });
+    const commentButtonId = createNativeSampleButton({ ...replyCapability, action: "comment" });
+
     const webhookUrl = verifiedPabblyUrl(fields[SEND_SAMPLE_LINK_FIELD_NAME]);
 
     const response = await fetch(webhookUrl, {
@@ -101,6 +111,8 @@ export default async function handler(req, res) {
         sample_job_id: jobId,
         sample_attachment_ids: attachmentIds.join(","),
         sample_submission_id: submissionId,
+        sample_approve_button_id: approveButtonId,
+        sample_comment_button_id: commentButtonId,
         sample_assets: selectedAssets,
         // Retain the JSON copy for integrations that already read it. Pabbly
         // also parses JSON strings, so the loop uses the URI-encoded copy.

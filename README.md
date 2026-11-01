@@ -58,10 +58,26 @@ actions. Platform requires an explicit managed-provider capability grant and
 privately archives the selected media before queueing. Submission acceptance
 is not a delivery claim.
 
-The native **Approve** button opens a signed read-only confirmation page. Only
-its explicit confirmation POST writes `Sample approved by client=true` and
-`Main Flow=Sample Approved` on the exact signed order. The **Comment** button
-opens a WhatsApp reply to the verified PM Notifications sender,
-`+972559664485`; comments stay in WhatsApp and no Airtable comment field is
-created or repurposed. Existing order fields/order and Print sticker remain
-unchanged.
+One WhatsApp message displays native **Approve** and **Comment** quick-reply
+buttons together, without opening a browser. Approve writes
+`Sample approved by client=true` and `Main Flow=Sample Approved` on the exact
+order. Comment keeps the customer in the PM Notifications chat
+(`+972559664485`) to type their feedback; no Airtable comment field is created.
+
+`POST /api/sample-native-reply` accepts only the separately signed Platform
+callback (`SAMPLE_NATIVE_REPLY_CALLBACK_SECRET`, at least 32 bytes), fresh
+timestamp, and exact issuer configured in `SAMPLE_NATIVE_REPLY_ISSUER` as JSON
+with `organizationId`, `lineId`, `bindingGeneration`, and `activationId`.
+Button capabilities are signed using the existing sample approval secret,
+bound to the order, clean phone, submission, saved attachment set and action.
+Changed sample/phone/order and forged callbacks fail closed. Repeated approvals
+do not rewrite an already checked order or move a later-stage order backwards.
+The attachment-set guard does not infer a "latest sent selection" when two
+submissions select different subsets of an otherwise unchanged saved set.
+An already checked approval with a different Main Flow is held for review;
+the receiver does not infer that the checkbox should be reset. Platform
+separately deduplicates native selections, serializes callback delivery and
+holds uncertain HTTP outcomes rather than automatically repeating a possible
+Airtable mutation. The old signed confirmation URL remains valid for existing
+messages; no existing token is rotated. Existing order fields/order, links and
+Print sticker remain unchanged.
