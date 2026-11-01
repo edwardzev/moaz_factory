@@ -76,10 +76,11 @@ export default async function handler(req, res) {
     const updatedAttachments = Array.isArray(updatedRecord?.fields?.[SAMPLE_FIELD_ID])
       ? updatedRecord.fields[SAMPLE_FIELD_ID]
       : [];
-    const attachment = updatedAttachments.find(item => item?.id && !existingAttachmentIds.has(item.id));
-    if (!attachment?.id) {
-      return res.status(502).json({ error: "Airtable accepted the upload but did not identify the new attachment." });
+    const newAttachments = updatedAttachments.filter(item => item?.id && !existingAttachmentIds.has(item.id));
+    if (newAttachments.length !== 1) {
+      return res.status(502).json({ error: "Airtable accepted the upload but could not uniquely identify this file. Review the order's Sample attachments before uploading again." });
     }
+    const attachment = newAttachments[0];
     return res.status(200).json({
       ok: true,
       attachmentId: attachment.id,

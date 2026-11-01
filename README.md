@@ -53,8 +53,8 @@ existing `Send sample link` Pabbly webhook with deterministic idempotency.
 An explicit `sample_assets_encoded` URI-encoded JSON copy survives Pabbly's
 simple-response flattening. A Code step decodes it into the media loop's array;
 the original array and JSON copy remain available for compatibility.
-Pabbly uses the existing PM Notifications credential through separate text/media
-relays. Platform requires an explicit managed-provider capability grant and
+Pabbly uses the preserved PM Notifications credential directly in its text/media
+actions. Platform requires an explicit managed-provider capability grant and
 privately archives the selected media before queueing. Submission acceptance
 is not a delivery claim.
 

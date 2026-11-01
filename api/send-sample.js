@@ -108,12 +108,12 @@ export default async function handler(req, res) {
         sample_assets_encoded: encodeURIComponent(JSON.stringify(selectedAssets)),
       }),
       // Do not forward signed callback URLs to a different host if the
-      // workflow endpoint responds with a redirect. The initial Pabbly request
-      // is the submission; any 2xx or 3xx response confirms it was accepted.
+      // workflow endpoint responds with a redirect. Only its own 2xx response
+      // confirms acceptance; a login or moved-endpoint redirect is not proof.
       redirect: "manual",
     });
     const responseText = await response.text();
-    if (response.status < 200 || response.status >= 400) {
+    if (response.status < 200 || response.status >= 300) {
       return res.status(502).json({
         error: `Send sample workflow rejected the submission (${response.status}).`,
       });
