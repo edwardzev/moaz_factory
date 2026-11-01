@@ -10,7 +10,7 @@ import {
 import crypto from "node:crypto";
 
 const PABBLY_HOSTNAME = "connect.pabbly.com";
-const PM_NOTIFICATION_PHONE = "972503969640";
+const PM_NOTIFICATION_PHONE = "972559664485";
 const ATTACHMENT_ID_PATTERN = /^att[A-Za-z0-9]{14}$/;
 
 function verifiedPabblyUrl(value) {
