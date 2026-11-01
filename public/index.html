@@ -825,6 +825,45 @@
     </div>
   </div>
 
+  <!-- Mobile sample capture and submission -->
+  <div id="sampleBackdrop" class="sample-backdrop" role="dialog" aria-modal="true" aria-hidden="true" aria-labelledby="sampleTitle">
+    <div class="sample-dialog">
+      <div class="sample-dialog-header">
+        <div>
+          <div class="sample-dialog-eyebrow">Customer approval</div>
+          <h2 id="sampleTitle">Send sample</h2>
+        </div>
+        <button id="sampleClose" class="sample-close" type="button" aria-label="Close Send sample">
+          <i class="ph ph-x" aria-hidden="true"></i>
+        </button>
+      </div>
+      <div class="sample-dialog-body">
+        <p class="sample-guidance">Add any number of photos or videos. Each file must be under 5 MB; the current mobile upload limit is 4.4 MB per file.</p>
+        <div class="sample-picker-actions">
+          <label class="sample-picker-button sample-picker-primary" role="button" tabindex="0">
+            <i class="ph ph-camera" aria-hidden="true"></i>
+            <span>Take photo or video</span>
+            <input id="sampleCameraInput" type="file" accept="image/*,video/*" capture="environment" hidden />
+          </label>
+          <label class="sample-picker-button" role="button" tabindex="0">
+            <i class="ph ph-images" aria-hidden="true"></i>
+            <span>Choose from device</span>
+            <input id="sampleFilesInput" type="file" accept="image/*,video/*" multiple hidden />
+          </label>
+        </div>
+        <div id="sampleFiles" class="sample-files" aria-live="polite"></div>
+        <div id="sampleMessage" class="sample-message" role="status"></div>
+      </div>
+      <div class="sample-dialog-footer">
+        <button id="sampleCancel" class="sample-cancel" type="button">Cancel</button>
+        <button id="sampleSubmit" class="sample-submit" type="button" disabled>
+          <i class="ph ph-paper-plane-tilt" aria-hidden="true"></i>
+          <span>Submit sample</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
   <!-- JS -->
   <script src="/app.js"></script>
 </body>

@@ -28,6 +28,15 @@ const viewerBackdrop = document.getElementById("viewerBackdrop");
 const viewerTitle = document.getElementById("viewerTitle");
 const viewerBody = document.getElementById("viewerBody");
 const viewerClose = document.getElementById("viewerClose");
+const sampleBackdrop = document.getElementById("sampleBackdrop");
+const sampleTitle = document.getElementById("sampleTitle");
+const sampleClose = document.getElementById("sampleClose");
+const sampleCancel = document.getElementById("sampleCancel");
+const sampleSubmit = document.getElementById("sampleSubmit");
+const sampleCameraInput = document.getElementById("sampleCameraInput");
+const sampleFilesInput = document.getElementById("sampleFilesInput");
+const sampleFiles = document.getElementById("sampleFiles");
+const sampleMessage = document.getElementById("sampleMessage");
 
 let allRows = [];
 let currentView = "list";
@@ -38,7 +47,13 @@ let materialDirectionOptions = [];
 let materialItemOptions = [];
 let globalSearchAbortController = null;
 let viewerReturnFocus = null;
+let sampleReturnFocus = null;
+let sampleRow = null;
+let pendingSampleFiles = [];
+let sampleSubmissionInProgress = false;
 const materialUpdateInFlight = new Set();
+
+const MAX_SAMPLE_FILE_BYTES = 4_400_000;
 
 const VIEW_MODES = {
   list: {
@@ -487,6 +502,209 @@ function stickerPrintAction(row, { compact = false } = {}) {
     </a>`;
 }
 
+function sendSampleAction(row) {
+  const recordId = String(row?.id ?? "").trim();
+  const jobId = String(row?.jobId ?? "").trim();
+  if (!recordId) return "";
+
+  return `
+    <button
+      class="sample-send-open"
+      type="button"
+      data-record-id="${escapeHtml(recordId)}"
+      data-job-id="${escapeHtml(jobId)}"
+      aria-label="Send sample for order ${escapeHtml(jobId || recordId)}"
+    >
+      <i class="ph ph-camera" aria-hidden="true"></i>
+      <span>Send Sample</span>
+    </button>`;
+}
+
+function orderActions(row) {
+  return `<div class="order-action-buttons">${stickerPrintAction(row)}${sendSampleAction(row)}</div>`;
+}
+
+function clearPendingSampleFiles() {
+  for (const item of pendingSampleFiles) URL.revokeObjectURL(item.previewUrl);
+  pendingSampleFiles = [];
+  sampleFiles.innerHTML = "";
+}
+
+function sampleFileLabel(file) {
+  const sizeMb = file.size / 1_000_000;
+  return `${file.name} · ${sizeMb.toFixed(sizeMb >= 1 ? 1 : 2)} MB`;
+}
+
+function renderPendingSampleFiles() {
+  if (!pendingSampleFiles.length) {
+    sampleFiles.innerHTML = `<div class="sample-empty">No photos or videos selected yet.</div>`;
+    sampleSubmit.disabled = true;
+    return;
+  }
+
+  sampleFiles.innerHTML = pendingSampleFiles.map((item) => {
+    const media = item.file.type.startsWith("video/")
+      ? `<video src="${escapeHtml(item.previewUrl)}" muted playsinline preload="metadata"></video>`
+      : `<img src="${escapeHtml(item.previewUrl)}" alt="" />`;
+    return `
+      <div class="sample-file" data-sample-file-id="${escapeHtml(item.id)}">
+        <div class="sample-file-preview">${media}</div>
+        <div class="sample-file-copy">
+          <strong>${escapeHtml(item.file.name)}</strong>
+          <span>${escapeHtml(sampleFileLabel(item.file))}${item.uploaded ? " · Uploaded" : ""}</span>
+        </div>
+        <button class="sample-file-remove" type="button" data-sample-file-id="${escapeHtml(item.id)}" aria-label="Remove ${escapeHtml(item.file.name)}"${item.uploaded || sampleSubmissionInProgress ? " disabled" : ""}>
+          <i class="ph ph-trash" aria-hidden="true"></i>
+        </button>
+      </div>`;
+  }).join("");
+  sampleSubmit.disabled = sampleSubmissionInProgress;
+}
+
+function setSampleMessage(message, { error = false } = {}) {
+  sampleMessage.textContent = message || "";
+  sampleMessage.classList.toggle("sample-message-error", Boolean(error));
+  sampleMessage.setAttribute("role", error ? "alert" : "status");
+}
+
+function addSampleFiles(fileList) {
+  const accepted = [];
+  const rejected = [];
+  for (const file of Array.from(fileList || [])) {
+    if (!file.type.startsWith("image/") && !file.type.startsWith("video/")) {
+      rejected.push(`${file.name}: only photos and videos are allowed`);
+      continue;
+    }
+    if (file.size <= 0 || file.size > MAX_SAMPLE_FILE_BYTES) {
+      rejected.push(`${file.name}: file must be smaller than 4.4 MB`);
+      continue;
+    }
+    accepted.push({
+      id: globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random()}`,
+      file,
+      previewUrl: URL.createObjectURL(file),
+      uploaded: false,
+      attachmentId: "",
+    });
+  }
+  pendingSampleFiles.push(...accepted);
+  renderPendingSampleFiles();
+  setSampleMessage(rejected.join("\n"), { error: rejected.length > 0 });
+}
+
+function openSampleDialog(row, trigger) {
+  if (!row?.id) return;
+  sampleRow = row;
+  sampleReturnFocus = trigger || document.activeElement;
+  clearPendingSampleFiles();
+  sampleCameraInput.value = "";
+  sampleFilesInput.value = "";
+  sampleTitle.textContent = `Send sample — ${row.jobId || "Order"}`;
+  sampleSubmissionInProgress = false;
+  sampleClose.disabled = false;
+  sampleCancel.disabled = false;
+  sampleCameraInput.disabled = false;
+  sampleFilesInput.disabled = false;
+  sampleBackdrop.removeAttribute("aria-busy");
+  const submitLabel = sampleSubmit.querySelector("span");
+  if (submitLabel) submitLabel.textContent = "Submit sample";
+  setSampleMessage("");
+  renderPendingSampleFiles();
+  sampleBackdrop.style.display = "flex";
+  sampleBackdrop.setAttribute("aria-hidden", "false");
+  sampleClose.focus();
+}
+
+function closeSampleDialog() {
+  if (sampleSubmissionInProgress) return;
+  const focusTarget = sampleReturnFocus;
+  sampleReturnFocus = null;
+  sampleRow = null;
+  clearPendingSampleFiles();
+  sampleBackdrop.style.display = "none";
+  sampleBackdrop.setAttribute("aria-hidden", "true");
+  sampleBackdrop.removeAttribute("aria-busy");
+  sampleClose.disabled = false;
+  sampleCancel.disabled = false;
+  sampleCameraInput.disabled = false;
+  sampleFilesInput.disabled = false;
+  if (focusTarget?.isConnected) focusTarget.focus();
+}
+
+async function uploadSampleFile(recordId, file) {
+  const params = new URLSearchParams({
+    id: recordId,
+    filename: file.name,
+    contentType: file.type,
+  });
+  const response = await fetch(`/api/sample-upload?${params.toString()}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/octet-stream" },
+    body: file,
+  });
+  const result = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(result?.error || `Upload failed for ${file.name}.`);
+  return result;
+}
+
+async function submitSample() {
+  if (!sampleRow?.id || !pendingSampleFiles.length || sampleSubmissionInProgress) return;
+
+  sampleSubmissionInProgress = true;
+  sampleSubmit.disabled = true;
+  sampleClose.disabled = true;
+  sampleCancel.disabled = true;
+  sampleCameraInput.disabled = true;
+  sampleFilesInput.disabled = true;
+  sampleBackdrop.setAttribute("aria-busy", "true");
+  const submitLabel = sampleSubmit.querySelector("span");
+  if (submitLabel) submitLabel.textContent = "Uploading…";
+
+  try {
+    const filesToUpload = pendingSampleFiles.filter(item => !item.uploaded);
+    for (let index = 0; index < filesToUpload.length; index += 1) {
+      const item = filesToUpload[index];
+      setSampleMessage(`Uploading ${index + 1} of ${filesToUpload.length}: ${item.file.name}`);
+      const uploadResult = await uploadSampleFile(sampleRow.id, item.file);
+      item.attachmentId = String(uploadResult?.attachmentId || "");
+      if (!item.attachmentId) throw new Error(`Airtable did not return an attachment id for ${item.file.name}.`);
+      item.uploaded = true;
+      renderPendingSampleFiles();
+    }
+
+    setSampleMessage("Files saved. Submitting the WhatsApp workflow…");
+    if (submitLabel) submitLabel.textContent = "Submitting…";
+    const response = await fetch("/api/send-sample", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        id: sampleRow.id,
+        attachmentIds: pendingSampleFiles.map(item => item.attachmentId),
+      }),
+    });
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(result?.error || "The WhatsApp workflow did not accept the submission.");
+
+    setSampleMessage(`Sample for order ${result.jobId || sampleRow.jobId || ""} was submitted to the PM WhatsApp workflow.`);
+    if (submitLabel) submitLabel.textContent = "Submitted ✓";
+    await load();
+    setTimeout(() => {
+      sampleSubmissionInProgress = false;
+      closeSampleDialog();
+    }, 1200);
+  } catch (error) {
+    sampleSubmissionInProgress = false;
+    setSampleMessage(error?.message || String(error), { error: true });
+    sampleSubmit.disabled = false;
+    sampleClose.disabled = false;
+    sampleCancel.disabled = false;
+    sampleCameraInput.disabled = false;
+    sampleFilesInput.disabled = false;
+    sampleBackdrop.removeAttribute("aria-busy");
+    if (submitLabel) submitLabel.textContent = "Submit sample";
+  }
+}
+
 function attachmentsList(items, { jobId, jobName }) {
   const arr = Array.isArray(items) ? items : [];
   if (!arr.length) return `<span class="muted">—</span>`;
@@ -804,7 +1022,7 @@ function renderOrderInspector(row) {
   }).join("");
 
   orderInspectorBody.innerHTML = `
-    <div class="inspector-order-actions">${stickerPrintAction(row)}</div>
+    <div class="inspector-order-actions">${orderActions(row)}</div>
     <div class="inspector-order-context" dir="auto">${escapeHtml(jobName)}</div>
     <div class="inspector-fields">${fields}</div>`;
   orderInspector.hidden = false;
@@ -913,7 +1131,7 @@ function openOrderModal(row) {
 
   viewerBody.innerHTML = `
     <div class="order-sheet-scroll" data-order-sheet-scroll>
-      <div class="order-sheet-actions">${stickerPrintAction(row)}</div>
+      <div class="order-sheet-actions">${orderActions(row)}</div>
       <table class="order-sheet">
         <tbody>${lines}</tbody>
       </table>
@@ -1081,6 +1299,19 @@ function orderEditorRootForTarget(target) {
 
 function handleOrderSurfaceClick(e) {
   if (e.target === viewerBackdrop) closeViewer();
+
+  const sampleTrigger = e.target.closest(".sample-send-open");
+  if (sampleTrigger) {
+    e.preventDefault();
+    const recordId = sampleTrigger.dataset.recordId || "";
+    const row =
+      rowForTarget(sampleTrigger) ||
+      allRows.find(item => item.id === recordId) ||
+      putMetersRows.find(item => item.id === recordId) ||
+      { id: recordId, jobId: sampleTrigger.dataset.jobId || "" };
+    if (row) openSampleDialog(row, sampleTrigger);
+    return;
+  }
 
   const putMetersOrderTrigger = e.target.closest(".put-meters-order-open");
   if (putMetersOrderTrigger) {
@@ -1371,7 +1602,50 @@ function handleOrderSurfaceClick(e) {
 }
 viewerBackdrop.addEventListener("click", handleOrderSurfaceClick);
 orderInspector.addEventListener("click", handleOrderSurfaceClick);
+sampleClose.addEventListener("click", closeSampleDialog);
+sampleCancel.addEventListener("click", closeSampleDialog);
+sampleSubmit.addEventListener("click", submitSample);
+sampleBackdrop.addEventListener("click", (event) => {
+  if (event.target === sampleBackdrop) closeSampleDialog();
+  const removeButton = event.target.closest(".sample-file-remove");
+  if (!removeButton || sampleSubmissionInProgress) return;
+  const index = pendingSampleFiles.findIndex(item => item.id === removeButton.dataset.sampleFileId);
+  if (index < 0) return;
+  URL.revokeObjectURL(pendingSampleFiles[index].previewUrl);
+  pendingSampleFiles.splice(index, 1);
+  renderPendingSampleFiles();
+});
+sampleCameraInput.addEventListener("change", () => {
+  addSampleFiles(sampleCameraInput.files);
+  sampleCameraInput.value = "";
+});
+sampleFilesInput.addEventListener("change", () => {
+  addSampleFiles(sampleFilesInput.files);
+  sampleFilesInput.value = "";
+});
+sampleBackdrop.addEventListener("keydown", (event) => {
+  const picker = event.target.closest(".sample-picker-button");
+  if (!picker || (event.key !== "Enter" && event.key !== " ")) return;
+  event.preventDefault();
+  picker.querySelector("input[type='file']")?.click();
+});
 document.addEventListener("keydown", (e) => {
+  if (e.key === "Tab" && sampleBackdrop.style.display === "flex") {
+    const focusable = Array.from(
+      sampleBackdrop.querySelectorAll("button:not(:disabled), [tabindex]:not([tabindex='-1'])")
+    ).filter(element => !element.hidden && element.getAttribute("aria-hidden") !== "true");
+    const first = focusable[0];
+    const last = focusable[focusable.length - 1];
+    if (e.shiftKey && document.activeElement === first) {
+      e.preventDefault();
+      last?.focus();
+    } else if (!e.shiftKey && document.activeElement === last) {
+      e.preventDefault();
+      first?.focus();
+    }
+    return;
+  }
+
   if (
     e.key === "Tab" &&
     viewerBackdrop.style.display === "flex" &&
@@ -1393,7 +1667,9 @@ document.addEventListener("keydown", (e) => {
   }
 
   if (e.key !== "Escape") return;
-  if (viewerBackdrop.style.display === "flex") {
+  if (sampleBackdrop.style.display === "flex") {
+    closeSampleDialog();
+  } else if (viewerBackdrop.style.display === "flex") {
     closeViewer();
   } else if (!orderInspector.hidden) {
     closeOrderInspector();
