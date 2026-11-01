@@ -6,8 +6,8 @@ import send from "../api/send-sample.js";
 import approve from "../api/sample-approve.js";
 
 function recorder() {
-  return { statusCode: null, body: null, status(code) { this.statusCode = code; return this; },
-    type() { return this; }, json(value) { this.body = value; return this; },
+  return { statusCode: null, body: null, headers: {}, status(code) { this.statusCode = code; return this; },
+    setHeader(name, value) { this.headers[name] = value; }, json(value) { this.body = value; return this; },
     send(value) { this.body = value; return this; }, end() { return this; } };
 }
 
@@ -53,6 +53,8 @@ test("full selected image/video flow uploads, submits exact assets, and confirms
     const url = submissions[0].approve_url;
     const page = recorder(); await approve({ method: "GET", url }, page);
     assert.equal(page.statusCode, 200); assert.match(page.body, /<form method="post"/); assert.equal(patches.length, 0);
+    assert.equal(page.headers["Content-Type"], "text/html; charset=utf-8");
+    assert.equal(page.headers["Cache-Control"], "no-store");
     const confirmed = recorder(); await approve({ method: "POST", url }, confirmed);
     assert.equal(confirmed.statusCode, 200);
     assert.deepEqual(patches, [{ "Sample approved by client": true, "Main Flow": "Sample Approved" }]);

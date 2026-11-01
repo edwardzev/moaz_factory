@@ -38,6 +38,9 @@ function page({ title, body, token = "", confirm = false }) {
 }
 export default async function handler(req, res) {
   if (req.method !== "GET" && req.method !== "POST") return res.status(405).end();
+  res.setHeader("Content-Type", "text/html; charset=utf-8");
+  res.setHeader("Cache-Control", "no-store");
+  res.setHeader("Referrer-Policy", "no-referrer");
 
   try {
     const requestUrl = new URL(req.url, "http://localhost");
@@ -46,14 +49,14 @@ export default async function handler(req, res) {
     const record = await readAirtableRecord(approval.recordId, [JOB_ID_FIELD_NAME]);
     const currentJobId = String(record?.fields?.[JOB_ID_FIELD_NAME] ?? "");
     if (!currentJobId || currentJobId !== approval.jobId) {
-      return res.status(409).type("html").send(page({
+      return res.status(409).send(page({
         title: "לא ניתן לאשר",
         body: "קישור האישור אינו תואם להזמנה.",
       }));
     }
 
     if (req.method === "GET") {
-      return res.status(200).type("html").send(page({
+      return res.status(200).send(page({
         title: `אישור דוגמה להזמנה ${htmlEscape(currentJobId)}`,
         body: "יש ללחוץ על הכפתור כדי לאשר את הדוגמה לייצור.",
         token,
@@ -66,12 +69,12 @@ export default async function handler(req, res) {
       [MAIN_FLOW_FIELD_NAME]: SAMPLE_APPROVED_MAIN_FLOW_VALUE,
     });
 
-    return res.status(200).type("html").send(page({
+    return res.status(200).send(page({
       title: "הדוגמה אושרה",
       body: `תודה. הזמנה ${htmlEscape(currentJobId)} הועברה לשלב הבא.`,
     }));
   } catch (error) {
-    return res.status(error?.statusCode || 400).type("html").send(page({
+    return res.status(error?.statusCode || 400).send(page({
       title: "לא ניתן לאשר",
       body: htmlEscape(error?.message || "קישור האישור אינו תקין."),
     }));
