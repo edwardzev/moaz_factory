@@ -47,6 +47,7 @@ test("full selected image/video flow uploads, submits exact assets, and confirms
     assert.deepEqual(submissions[0].sample_assets.map(item => item.mediaKind), ["image", "video"]);
     assert.deepEqual(submissions[0].sample_assets.map(item => item.id), attachmentIds);
     assert.deepEqual(JSON.parse(submissions[0].sample_assets_json), submissions[0].sample_assets);
+    assert.deepEqual(JSON.parse(decodeURIComponent(submissions[0].sample_assets_encoded)), submissions[0].sample_assets);
     assert.match(submissions[0].comment_url, /^https:\/\/wa\.me\/972559664485\?text=/);
     assert.equal(patches.length, 0);
     const url = submissions[0].approve_url;

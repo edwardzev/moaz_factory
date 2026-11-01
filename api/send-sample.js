@@ -102,9 +102,10 @@ export default async function handler(req, res) {
         sample_attachment_ids: attachmentIds.join(","),
         sample_submission_id: submissionId,
         sample_assets: selectedAssets,
-        // Pabbly's simple webhook response flattens arrays into numbered
-        // fields. Preserve one explicit JSON value for its media loop.
+        // Retain the JSON copy for integrations that already read it. Pabbly
+        // also parses JSON strings, so the loop uses the URI-encoded copy.
         sample_assets_json: JSON.stringify(selectedAssets),
+        sample_assets_encoded: encodeURIComponent(JSON.stringify(selectedAssets)),
       }),
       // Do not forward signed callback URLs to a different host if the
       // workflow endpoint responds with a redirect. The initial Pabbly request
