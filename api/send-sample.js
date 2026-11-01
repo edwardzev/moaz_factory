@@ -7,6 +7,7 @@ import {
   publicOrigin,
   readAirtableRecord,
 } from "./_sample-utils.js";
+import crypto from "node:crypto";
 
 const PABBLY_HOSTNAME = "connect.pabbly.com";
 const PM_NOTIFICATION_PHONE = "972503969640";
@@ -43,8 +44,12 @@ export default async function handler(req, res) {
     ]);
     const fields = record?.fields || {};
     const attachments = Array.isArray(fields[SAMPLE_FIELD_NAME]) ? fields[SAMPLE_FIELD_NAME] : [];
-    const savedAttachmentIds = new Set(attachments.map(item => item?.id).filter(Boolean));
-    const missingAttachmentIds = attachmentIds.filter(id => !savedAttachmentIds.has(id));
+    const attachmentsById = new Map(
+      attachments
+        .filter(item => item?.id)
+        .map(item => [item.id, item])
+    );
+    const missingAttachmentIds = attachmentIds.filter(id => !attachmentsById.has(id));
     if (missingAttachmentIds.length) {
       return res.status(409).json({
         error: "Airtable has not finished saving every selected sample file. Please wait and submit again.",
@@ -58,15 +63,46 @@ export default async function handler(req, res) {
     const commentText = `Comment on sample for order ${jobId}: `;
     const commentUrl = `https://wa.me/${PM_NOTIFICATION_PHONE}?text=${encodeURIComponent(commentText)}`;
 
+    const selectedAssets = attachmentIds.map(id => {
+      const attachment = attachmentsById.get(id);
+      const contentType = String(attachment?.type || "").trim().toLowerCase();
+      const assetUrl = String(attachment?.url || "").trim();
+      if (!assetUrl.startsWith("https://") || (!contentType.startsWith("image/") && !contentType.startsWith("video/"))) {
+        const error = new Error("A selected sample file is not a valid Airtable photo or video attachment.");
+        error.statusCode = 409;
+        throw error;
+      }
+      return {
+        id,
+        url: assetUrl,
+        filename: String(attachment?.filename || `sample-${id}`).trim(),
+        contentType,
+        mediaKind: contentType.startsWith("video/") ? "video" : "image",
+      };
+    });
+    const submissionId = crypto
+      .createHash("sha256")
+      .update(`${recordId}\n${attachmentIds.join(",")}`)
+      .digest("hex")
+      .slice(0, 32);
+
     const webhookUrl = verifiedPabblyUrl(fields[SEND_SAMPLE_LINK_FIELD_NAME]);
-    webhookUrl.searchParams.set("approve_url", approvalUrl);
-    webhookUrl.searchParams.set("comment_url", commentUrl);
-    webhookUrl.searchParams.set("sample_job_id", jobId);
-    webhookUrl.searchParams.set("sample_attachment_ids", attachmentIds.join(","));
 
     const response = await fetch(webhookUrl, {
-      method: "GET",
-      headers: { Accept: "application/json, text/plain, */*" },
+      method: "POST",
+      headers: {
+        Accept: "application/json, text/plain, */*",
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        rec_id: recordId,
+        approve_url: approvalUrl,
+        comment_url: commentUrl,
+        sample_job_id: jobId,
+        sample_attachment_ids: attachmentIds.join(","),
+        sample_submission_id: submissionId,
+        sample_assets: selectedAssets,
+      }),
       // Do not forward signed callback URLs to a different host if the
       // workflow endpoint responds with a redirect. The initial Pabbly request
       // is the submission; any 2xx or 3xx response confirms it was accepted.
@@ -83,6 +119,7 @@ export default async function handler(req, res) {
       ok: true,
       submitted: true,
       jobId,
+      submissionId,
       workflowResponseReceived: Boolean(responseText),
     });
   } catch (error) {
