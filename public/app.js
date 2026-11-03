@@ -51,6 +51,7 @@ let sampleReturnFocus = null;
 let sampleRow = null;
 let pendingSampleFiles = [];
 let sampleSubmissionInProgress = false;
+let sampleSubmissionAccepted = false;
 const materialUpdateInFlight = new Set();
 
 const MAX_SAMPLE_FILE_BYTES = 4_400_000;
@@ -558,7 +559,7 @@ function renderPendingSampleFiles() {
         </button>
       </div>`;
   }).join("");
-  sampleSubmit.disabled = sampleSubmissionInProgress;
+  sampleSubmit.disabled = sampleSubmissionInProgress || sampleSubmissionAccepted;
 }
 
 function setSampleMessage(message, { error = false } = {}) {
@@ -601,6 +602,7 @@ function openSampleDialog(row, trigger) {
   sampleFilesInput.value = "";
   sampleTitle.textContent = `Send sample — ${row.jobId || "Order"}`;
   sampleSubmissionInProgress = false;
+  sampleSubmissionAccepted = false;
   sampleClose.disabled = false;
   sampleCancel.disabled = false;
   sampleCameraInput.disabled = false;
@@ -648,7 +650,7 @@ async function uploadSampleFile(recordId, file) {
 }
 
 async function submitSample() {
-  if (!sampleRow?.id || !pendingSampleFiles.length || sampleSubmissionInProgress) return;
+  if (!sampleRow?.id || !pendingSampleFiles.length || sampleSubmissionInProgress || sampleSubmissionAccepted) return;
 
   sampleSubmissionInProgress = true;
   sampleSubmit.disabled = true;
@@ -685,8 +687,20 @@ async function submitSample() {
     const result = await response.json().catch(() => ({}));
     if (!response.ok) throw new Error(result?.error || "The WhatsApp workflow did not accept the submission.");
 
-    setSampleMessage(`Sample for order ${result.jobId || sampleRow.jobId || ""} was submitted to the PM WhatsApp workflow.`);
+    sampleSubmissionAccepted = true;
+    const submittedMessage = `Sample for order ${result.jobId || sampleRow.jobId || ""} was submitted to the PM WhatsApp workflow.`;
     if (submitLabel) submitLabel.textContent = "Submitted ✓";
+    if (result.groupNotification?.status === "unavailable") {
+      const reason = result.groupNotification.reason || "The configured group copy is unavailable.";
+      setSampleMessage(`${submittedMessage}\nGroup notification was not submitted: ${reason}\nDo not resubmit the customer sample. Close this dialog after reviewing the warning.`, { error: true });
+      sampleSubmissionInProgress = false;
+      sampleClose.disabled = false;
+      sampleCancel.disabled = false;
+      sampleBackdrop.removeAttribute("aria-busy");
+      await load();
+      return;
+    }
+    setSampleMessage(submittedMessage);
     await load();
     setTimeout(() => {
       sampleSubmissionInProgress = false;
@@ -695,13 +709,13 @@ async function submitSample() {
   } catch (error) {
     sampleSubmissionInProgress = false;
     setSampleMessage(error?.message || String(error), { error: true });
-    sampleSubmit.disabled = false;
+    sampleSubmit.disabled = sampleSubmissionAccepted;
     sampleClose.disabled = false;
     sampleCancel.disabled = false;
     sampleCameraInput.disabled = false;
     sampleFilesInput.disabled = false;
     sampleBackdrop.removeAttribute("aria-busy");
-    if (submitLabel) submitLabel.textContent = "Submit sample";
+    if (submitLabel) submitLabel.textContent = sampleSubmissionAccepted ? "Submitted ✓" : "Submit sample";
   }
 }
 

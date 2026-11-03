@@ -2,7 +2,23 @@ import crypto from "node:crypto";
 import { assertRecordId } from "./_sample-utils.js";
 
 export const CLEAN_PHONE_FIELD_NAME = "Clean phone number";
+export const CLIENT_NAME_FIELD_NAME = "Client name text";
 const ATTACHMENT_ID = /^att[A-Za-z0-9]{14}$/;
+const INDIVIDUAL_CHAT_ID = /^[1-9][0-9]{7,14}@s\.whatsapp\.net$/;
+const GROUP_CHAT_ID = /^[1-9][0-9]*(?:-[0-9]+)?@g\.us$/;
+const PM_NOTIFICATION_CHAT_ID = "972559664485@s.whatsapp.net";
+
+function assertSampleGroup(value) {
+  if (typeof value !== "string" || !GROUP_CHAT_ID.test(value) || value.split("@")[0].length > 31) {
+    throw new Error("Invalid sample notification group.");
+  }
+  return value;
+}
+
+export function configuredSampleGroup() {
+  const value = process.env.SAMPLE_NOTIFICATION_GROUP_ID;
+  return value === undefined || value === "" ? null : assertSampleGroup(value);
+}
 
 export function sampleRecipient(value) {
   const phone = String(value ?? "");
@@ -35,16 +51,58 @@ export function createNativeSampleButton({ recordId, jobId, recipientChatId, sub
   return id;
 }
 
+function groupActionKey() {
+  // Separate signing domain: a customer capability cannot be relabelled as a
+  // group capability, even when every other order value is unchanged.
+  return crypto.createHmac("sha256", actionKey()).update("moaz-native-sample-group-reply-v3").digest();
+}
+
+export function createNativeGroupSampleButton({ recordId, jobId, recipientChatId, customerPhone, submissionId, fingerprint, action }) {
+  const groupId = assertSampleGroup(recipientChatId);
+  const customerChatId = sampleRecipient(customerPhone);
+  if (!jobId || !/^[a-f0-9]{32}$/.test(submissionId) || !/^[A-Za-z0-9_-]{22}$/.test(fingerprint) || !["approve", "comment"].includes(action)) {
+    throw new Error("Invalid sample group reply capability.");
+  }
+  const payload = Buffer.from(JSON.stringify([3, assertRecordId(recordId), String(jobId), customerChatId.split("@")[0], groupId.split("@")[0], submissionId, fingerprint, action === "approve" ? "a" : "c"])).toString("base64url");
+  const signature = crypto.createHmac("sha256", groupActionKey()).update(payload).digest("base64url");
+  const id = `ms3.${payload}.${signature}`;
+  if (Buffer.byteLength(id) > 256) throw new Error("The order identifier is too long for a native sample group button.");
+  return id;
+}
+
+function verifyNativeGroupSampleButton(payload, signature) {
+  const expected = crypto.createHmac("sha256", groupActionKey()).update(payload).digest();
+  const supplied = Buffer.from(signature, "base64url");
+  if (supplied.length !== expected.length || !crypto.timingSafeEqual(expected, supplied)) throw new Error("Invalid native sample group button.");
+  const parsed = JSON.parse(Buffer.from(payload, "base64url").toString("utf8"));
+  if (!Array.isArray(parsed) || parsed.length !== 8 || parsed[0] !== 3 || typeof parsed[2] !== "string" || !parsed[2] || typeof parsed[3] !== "string" || typeof parsed[4] !== "string" || !/^[a-f0-9]{32}$/.test(parsed[5]) || !/^[A-Za-z0-9_-]{22}$/.test(parsed[6]) || !["a", "c"].includes(parsed[7])) throw new Error("Invalid native sample group button.");
+  const customerRecipient = sampleRecipient(parsed[3]);
+  return {
+    audience: "group", recordId: assertRecordId(parsed[1]), jobId: parsed[2],
+    recipientChatId: assertSampleGroup(`${parsed[4]}@g.us`), customerPhone: customerRecipient.split("@")[0],
+    submissionId: parsed[5], fingerprint: parsed[6], action: parsed[7] === "a" ? "approve" : "comment",
+  };
+}
+
 export function verifyNativeSampleButton(id) {
   if (typeof id !== "string" || Buffer.byteLength(id) > 256) throw new Error("Invalid native sample button.");
   const [version, payload, signature, extra] = id.split(".");
-  if (version !== "ms2" || !payload || !signature || extra || !/^[A-Za-z0-9_-]+$/.test(payload) || !/^[A-Za-z0-9_-]{43}$/.test(signature)) throw new Error("Invalid native sample button.");
+  if (!["ms2", "ms3"].includes(version) || !payload || !signature || extra || !/^[A-Za-z0-9_-]+$/.test(payload) || !/^[A-Za-z0-9_-]{43}$/.test(signature)) throw new Error("Invalid native sample button.");
+  if (version === "ms3") return verifyNativeGroupSampleButton(payload, signature);
   const expected = crypto.createHmac("sha256", actionKey()).update(payload).digest();
   const supplied = Buffer.from(signature, "base64url");
   if (supplied.length !== expected.length || !crypto.timingSafeEqual(expected, supplied)) throw new Error("Invalid native sample button.");
   const parsed = JSON.parse(Buffer.from(payload, "base64url").toString("utf8"));
   if (!Array.isArray(parsed) || parsed.length !== 7 || parsed[0] !== 2 || typeof parsed[2] !== "string" || !parsed[2] || !/^[a-f0-9]{32}$/.test(parsed[4]) || !/^[A-Za-z0-9_-]{22}$/.test(parsed[5]) || !["a", "c"].includes(parsed[6])) throw new Error("Invalid native sample button.");
   return { recordId: assertRecordId(parsed[1]), jobId: parsed[2], recipientChatId: sampleRecipient(parsed[3]), submissionId: parsed[4], fingerprint: parsed[5], action: parsed[6] === "a" ? "approve" : "comment" };
+}
+
+export function assertGroupReplyParticipant(callback) {
+  // Platform authenticates the exact raw provider participant and rejects its
+  // own line identity. The signed group recipient is not the actor's identity.
+  if (typeof callback.participantChatId !== "string" || !INDIVIDUAL_CHAT_ID.test(callback.participantChatId) || callback.participantChatId === PM_NOTIFICATION_CHAT_ID) {
+    throw new Error("Native group reply participant is unavailable.");
+  }
 }
 
 export function verifyNativeReplyEnvelope(rawBody, headers, now = Date.now()) {

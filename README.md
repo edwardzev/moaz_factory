@@ -81,3 +81,41 @@ holds uncertain HTTP outcomes rather than automatically repeating a possible
 Airtable mutation. The old signed confirmation URL remains valid for existing
 messages; no existing token is rotated. Existing order fields/order, links and
 Print sticker remain unchanged.
+
+### Samples group copy
+
+`SAMPLE_NOTIFICATION_GROUP_ID` explicitly enables one exact group recipient;
+the approved production group is `120363414125815359@g.us` (`SAMPLES`). Without
+that setting, the existing customer-only submission is unchanged. Group
+submissions add `sample_group_id`, `sample_customer_name`,
+`sample_group_approve_button_id`, and `sample_group_comment_button_id` to the
+same webhook payload. `sample_customer_name` is the exact existing
+`Client name text` string, or the single string from that field's one-value
+Airtable lookup array. Several lookup values are never joined/deduplicated,
+and no name or phone fallback is invented. If that name is absent/blank,
+ambiguous, or the group capability cannot be generated, the customer
+send remains available, all group-send fields are omitted, and
+`sample_group_notification_unavailable` states the group-only gap. The workflow
+must require the complete group fields before attempting a group copy.
+The API also returns server-derived `groupNotification` metadata: `submitted`
+means the group copy was included in the accepted workflow submission, not
+delivered; `unavailable` includes the exact reason and leaves a visible,
+nonfatal operator warning open without enabling a duplicate customer submit;
+`disabled` means no group is configured and produces no warning. Request-body
+claims cannot override this status.
+
+After the customer transport is confirmed, the workflow sends the same selected
+photos/videos to that group with “The sample of {order} is sent to {customer}.”
+and native **Approve** and **Comment** buttons. Submission acceptance alone
+does not claim customer or group delivery. Group members may approve the order,
+writing the same two existing approval/Main Flow fields. Comments remain typed
+in the WhatsApp group; no Airtable comment field is introduced.
+
+Group buttons use a distinct `ms3` signing domain and additionally bind the
+exact group plus the original customer phone. The receiver requires the
+configured group, a separately authenticated individual `participantChatId`
+from Platform's signed callback, and fresh order/customer/sample data. The PM
+Notifications sender itself is not an eligible group participant. Customer
+`ms2` buttons and callbacks remain compatible without `participantChatId`.
+Changing/removing the configured group invalidates old group buttons without
+changing existing customer buttons or tokens.
