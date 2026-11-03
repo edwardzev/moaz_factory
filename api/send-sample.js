@@ -8,11 +8,40 @@ import {
   readAirtableRecord,
 } from "./_sample-utils.js";
 import crypto from "node:crypto";
-import { CLEAN_PHONE_FIELD_NAME, createNativeSampleButton, sampleFingerprint, sampleRecipient } from "./_native-sample-replies.js";
+import {
+  CLEAN_PHONE_FIELD_NAME, CLIENT_NAME_FIELD_NAME, configuredSampleGroup,
+  createNativeSampleButton, createNativeGroupSampleButton, sampleFingerprint, sampleRecipient,
+} from "./_native-sample-replies.js";
 
 const PABBLY_HOSTNAME = "connect.pabbly.com";
 const PM_NOTIFICATION_PHONE = "972559664485";
 const ATTACHMENT_ID_PATTERN = /^att[A-Za-z0-9]{14}$/;
+
+function groupNotificationPayload(fields, capability) {
+  try {
+    const groupId = configuredSampleGroup();
+    if (!groupId) return {};
+    const sourceName = fields[CLIENT_NAME_FIELD_NAME];
+    // The current Airtable lookup returns a one-item string array. Accept
+    // only that explicit unambiguous shape or a direct string; never join or
+    // collapse several customers into an invented recipient name.
+    const customerName = Array.isArray(sourceName) && sourceName.length === 1 ? sourceName[0] : sourceName;
+    if (typeof customerName !== "string" || !customerName.trim()) {
+      return { sample_group_notification_unavailable: "The order has no single nonblank Client name text value. No group notification may be sent." };
+    }
+    const groupCapability = { ...capability, recipientChatId: groupId, customerPhone: fields[CLEAN_PHONE_FIELD_NAME] };
+    return {
+      sample_group_id: groupId,
+      sample_customer_name: customerName,
+      sample_group_approve_button_id: createNativeGroupSampleButton({ ...groupCapability, action: "approve" }),
+      sample_group_comment_button_id: createNativeGroupSampleButton({ ...groupCapability, action: "comment" }),
+    };
+  } catch {
+    // A group-only configuration/capability error must not stop the existing
+    // customer sample send or invent a recipient/name for the group copy.
+    return { sample_group_notification_unavailable: "The sample group notification could not be configured. No group notification may be sent." };
+  }
+}
 
 function verifiedPabblyUrl(value) {
   let url;
@@ -43,6 +72,7 @@ export default async function handler(req, res) {
       SAMPLE_FIELD_NAME,
       SEND_SAMPLE_LINK_FIELD_NAME,
       CLEAN_PHONE_FIELD_NAME,
+      CLIENT_NAME_FIELD_NAME,
     ]);
     const fields = record?.fields || {};
     const attachments = Array.isArray(fields[SAMPLE_FIELD_NAME]) ? fields[SAMPLE_FIELD_NAME] : [];
@@ -95,6 +125,14 @@ export default async function handler(req, res) {
     };
     const approveButtonId = createNativeSampleButton({ ...replyCapability, action: "approve" });
     const commentButtonId = createNativeSampleButton({ ...replyCapability, action: "comment" });
+    const groupPayload = groupNotificationPayload(fields, replyCapability);
+    // Derive this only from the server's configured group and saved Airtable
+    // fields. Caller-supplied group status is never an authority.
+    const groupNotification = groupPayload.sample_group_id
+      ? { requested: true, status: "submitted" }
+      : groupPayload.sample_group_notification_unavailable
+        ? { requested: true, status: "unavailable", reason: groupPayload.sample_group_notification_unavailable }
+        : { requested: false, status: "disabled" };
 
     const webhookUrl = verifiedPabblyUrl(fields[SEND_SAMPLE_LINK_FIELD_NAME]);
 
@@ -113,6 +151,7 @@ export default async function handler(req, res) {
         sample_submission_id: submissionId,
         sample_approve_button_id: approveButtonId,
         sample_comment_button_id: commentButtonId,
+        ...groupPayload,
         sample_assets: selectedAssets,
         // Retain the JSON copy for integrations that already read it. Pabbly
         // also parses JSON strings, so the loop uses the URI-encoded copy.
@@ -136,6 +175,7 @@ export default async function handler(req, res) {
       submitted: true,
       jobId,
       submissionId,
+      groupNotification,
       workflowResponseReceived: Boolean(responseText),
     });
   } catch (error) {
