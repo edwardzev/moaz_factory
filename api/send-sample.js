@@ -8,7 +8,7 @@ import {
   readAirtableRecord,
 } from "./_sample-utils.js";
 import crypto from "node:crypto";
-import { CLEAN_PHONE_FIELD_NAME, createNativeSampleButton, sampleFingerprint, sampleRecipient } from "./_native-sample-replies.js";
+import { CLEAN_PHONE_FIELD_NAME, createNativeSampleButton, createNativeGroupSampleButton, configuredSampleGroup, sampleFingerprint, sampleRecipient } from "./_native-sample-replies.js";
 
 const PABBLY_HOSTNAME = "connect.pabbly.com";
 const PM_NOTIFICATION_PHONE = "972559664485";
@@ -43,6 +43,7 @@ export default async function handler(req, res) {
       SAMPLE_FIELD_NAME,
       SEND_SAMPLE_LINK_FIELD_NAME,
       CLEAN_PHONE_FIELD_NAME,
+      "Client name text",
     ]);
     const fields = record?.fields || {};
     const attachments = Array.isArray(fields[SAMPLE_FIELD_NAME]) ? fields[SAMPLE_FIELD_NAME] : [];
@@ -96,6 +97,26 @@ export default async function handler(req, res) {
     const approveButtonId = createNativeSampleButton({ ...replyCapability, action: "approve" });
     const commentButtonId = createNativeSampleButton({ ...replyCapability, action: "comment" });
 
+    const groupId = configuredSampleGroup();
+    let groupPayload = {};
+    if (groupId) {
+      const nameValue = fields["Client name text"];
+      const customerName = Array.isArray(nameValue) && nameValue.length === 1 ? nameValue[0] : nameValue;
+      if (typeof customerName !== "string" || !customerName.trim()) {
+        const error = new Error("The order needs one exact customer name before its sample can be copied to the group.");
+        error.statusCode = 409;
+        throw error;
+      }
+      const groupCapability = { ...replyCapability, recipientChatId: groupId, customerRecipientChatId: replyCapability.recipientChatId };
+      groupPayload = {
+        sample_group_id: groupId,
+        sample_customer_name: customerName,
+        sample_group_media_idempotency_keys: attachmentIds.map(id => `sample-${submissionId}-group-${groupId.split("@")[0]}-asset-${id}`).join(","),
+        sample_group_message: `The sample of ${jobId} is sent to ${customerName}.`,
+        sample_group_approve_button_id: createNativeGroupSampleButton({ ...groupCapability, action: "approve" }),
+        sample_group_comment_button_id: createNativeGroupSampleButton({ ...groupCapability, action: "comment" }),
+      };
+    }
     const webhookUrl = verifiedPabblyUrl(fields[SEND_SAMPLE_LINK_FIELD_NAME]);
 
     const response = await fetch(webhookUrl, {
@@ -106,6 +127,7 @@ export default async function handler(req, res) {
       },
       body: JSON.stringify({
         rec_id: recordId,
+        ...groupPayload,
         approve_url: approvalUrl,
         comment_url: commentUrl,
         sample_job_id: jobId,

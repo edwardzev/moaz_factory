@@ -5,7 +5,7 @@ import {
 } from "./_sample-utils.js";
 import {
   CLEAN_PHONE_FIELD_NAME, sampleRecipient, sampleFingerprint,
-  verifyNativeReplyEnvelope, verifyNativeSampleButton,
+  verifyNativeReplyEnvelope, verifyNativeSampleButton, configuredSampleGroup,
 } from "./_native-sample-replies.js";
 
 export const config = { api: { bodyParser: false } };
@@ -38,9 +38,15 @@ export default async function handler(req, res) {
     const callback = verifyNativeReplyEnvelope(await rawBody(req), req.headers || {});
     const action = verifyNativeSampleButton(callback.selectedButtonId);
     if (callback.recipientChatId !== action.recipientChatId) throw new Error("Native reply recipient does not match.");
+    const isGroup = Boolean(action.customerRecipientChatId);
+    if (isGroup) {
+      if (callback.version !== "native-reply.v2" || !configuredSampleGroup() || action.recipientChatId !== configuredSampleGroup()) throw new Error("Group sample reply is not authorized.");
+    } else if (callback.version !== "native-reply.v1") {
+      throw new Error("Invalid customer sample reply version.");
+    }
     const record = await airtableOperation(() => readAirtableRecord(action.recordId, [JOB_ID_FIELD_NAME, CLEAN_PHONE_FIELD_NAME, SAMPLE_FIELD_NAME, SAMPLE_APPROVED_FIELD_NAME, MAIN_FLOW_FIELD_NAME]));
     const fields = record.fields || {};
-    if (String(fields[JOB_ID_FIELD_NAME] ?? "") !== action.jobId || sampleRecipient(fields[CLEAN_PHONE_FIELD_NAME]) !== action.recipientChatId || sampleFingerprint(fields[SAMPLE_FIELD_NAME]) !== action.fingerprint) {
+    if (String(fields[JOB_ID_FIELD_NAME] ?? "") !== action.jobId || sampleRecipient(fields[CLEAN_PHONE_FIELD_NAME]) !== (action.customerRecipientChatId || action.recipientChatId) || sampleFingerprint(fields[SAMPLE_FIELD_NAME]) !== action.fingerprint) {
       return res.status(409).json({ error: "The order, recipient, or sample has changed. Send a new sample." });
     }
     if (action.action === "comment") {

@@ -81,3 +81,27 @@ holds uncertain HTTP outcomes rather than automatically repeating a possible
 Airtable mutation. The old signed confirmation URL remains valid for existing
 messages; no existing token is rotated. Existing order fields/order, links and
 Print sticker remain unchanged.
+
+### Samples group approval
+
+Optional `SAMPLE_GROUP_ID` enables the same additional group payload as Ahmed.
+The literal notice uses exact `Client name text`; missing or multiple names
+block the workflow submission. Group media idempotency keys are destination
+specific. The prepared additive Pabbly route reuses the existing selected-media
+decoder, has its own exact-group media readiness gate, and sends separate `ms3`
+Approve/Comment buttons. Existing customer `ms2` and fallback links are unchanged.
+
+A group `ms3` capability separately binds the group and current customer phone,
+record/JOB ID, submission, Sample attachment fingerprint, and action. The
+receiver requires signed `native-reply.v2` with the exact group and individual
+`participantChatId`, and the group must match this receiver's `SAMPLE_GROUP_ID`.
+The business owner permits group members to approve. Comment stays in the same
+group WhatsApp chat. Platform retains the authenticated participant in its
+immutable callback evidence; no Airtable field is added. Customer callbacks
+continue to require `native-reply.v1`. Repeats retain the existing already-approved
+and no-rewind rules. External Airtable effects are not claimed exactly once.
+
+Do not enable the group setting until the Platform exact-group grant,
+queue/provider/readiness/callback extension and Pabbly route are released.
+Readiness and workflow acceptance do not establish customer delivery. No live
+send or approval is implied by source tests.

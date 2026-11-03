@@ -36,6 +36,7 @@ export function createNativeSampleButton({ recordId, jobId, recipientChatId, sub
 }
 
 export function verifyNativeSampleButton(id) {
+  if (typeof id === "string" && id.startsWith("ms3.")) return verifyNativeGroupSampleButton(id);
   if (typeof id !== "string" || Buffer.byteLength(id) > 256) throw new Error("Invalid native sample button.");
   const [version, payload, signature, extra] = id.split(".");
   if (version !== "ms2" || !payload || !signature || extra || !/^[A-Za-z0-9_-]+$/.test(payload) || !/^[A-Za-z0-9_-]{43}$/.test(signature)) throw new Error("Invalid native sample button.");
@@ -62,9 +63,59 @@ export function verifyNativeReplyEnvelope(rawBody, headers, now = Date.now()) {
   if (!crypto.timingSafeEqual(expected, Buffer.from(signature, "hex"))) throw new Error("Invalid native reply authentication.");
   const body = JSON.parse(rawBody.toString("utf8"));
   const issuer = JSON.parse(issuerText);
-  if (body.version !== "native-reply.v1" || ["organizationId", "lineId", "bindingGeneration", "activationId"].some(key => !issuer[key] || body[key] !== issuer[key])) throw new Error("Invalid native reply issuer.");
+  if (!["native-reply.v1", "native-reply.v2"].includes(body.version) || ["organizationId", "lineId", "bindingGeneration", "activationId"].some(key => !issuer[key] || body[key] !== issuer[key])) throw new Error("Invalid native reply issuer.");
   if (["deliveryId", "originMessageId", "originProviderMessageId", "replyProviderMessageId", "rawEventId", "recipientChatId", "selectedButtonId"].some(key => typeof body[key] !== "string" || !body[key] || body[key].length > 512)) throw new Error("Invalid native reply evidence.");
+  if (body.version === "native-reply.v2") {
+    sampleGroupRecipient(body.recipientChatId);
+    if (typeof body.participantChatId !== "string" || !/^[0-9]{5,20}@(s\.whatsapp\.net|lid)$/.test(body.participantChatId)) throw new Error("Invalid group reply participant.");
+  }
   const occurredAt = Date.parse(body.occurredAt);
   if (!Number.isFinite(occurredAt) || occurredAt > now + 300_000 || occurredAt < now - 7 * 86400_000) throw new Error("Expired native reply.");
   return body;
+}
+
+
+// v3 grants approval to this exact group while separately binding the customer.
+const GROUP_ID = /^[0-9]{5,30}(?:-[0-9]{5,30})?@g\.us$/;
+export function sampleGroupRecipient(value) {
+  if (typeof value !== "string" || !GROUP_ID.test(value)) throw new Error("Invalid sample group.");
+  return value;
+}
+
+export function configuredSampleGroup() {
+  const value = process.env.SAMPLE_GROUP_ID || "";
+  return value ? sampleGroupRecipient(value) : "";
+}
+
+function groupActionKey() {
+  const secret = String(process.env.SAMPLE_APPROVAL_SECRET || process.env.AIRTABLE_TOKEN || "").trim();
+  if (!secret) throw new Error("Sample approval signing is not configured.");
+  return crypto.createHmac("sha256", secret)
+    .update("moaz-native-sample-group-reply-v3").digest();
+}
+
+export function createNativeGroupSampleButton({ recordId, jobId, recipientChatId, customerRecipientChatId, submissionId, fingerprint, action }) {
+  if (!/^[a-f0-9]{32}$/.test(submissionId) || !/^[A-Za-z0-9_-]{22}$/.test(fingerprint) || !["approve", "comment"].includes(action)) throw new Error("Invalid group sample reply capability.");
+  const customer = sampleRecipient(customerRecipientChatId.replace(/@s\.whatsapp\.net$/, ""));
+  if (customer !== customerRecipientChatId) throw new Error("Invalid sample customer.");
+  const group = sampleGroupRecipient(recipientChatId);
+  const order = String(jobId ?? "");
+  if (!order) throw new Error("The sample order identifier is missing.");
+  const payload = Buffer.from(JSON.stringify([3, assertRecordId(recordId), order, customer.split("@")[0], submissionId, fingerprint, group.split("@")[0], action === "approve" ? "a" : "c"])).toString("base64url");
+  const signature = crypto.createHmac("sha256", groupActionKey()).update(payload).digest("base64url");
+  const id = `ms3.${payload}.${signature}`;
+  if (Buffer.byteLength(id) > 256) throw new Error("The order identifier is too long for a native group sample button.");
+  return id;
+}
+
+function verifyNativeGroupSampleButton(id) {
+  if (typeof id !== "string" || Buffer.byteLength(id) > 256) throw new Error("Invalid native group sample button.");
+  const [version, payload, signature, extra] = id.split(".");
+  if (version !== "ms3" || !payload || !signature || extra || !/^[A-Za-z0-9_-]+$/.test(payload) || !/^[A-Za-z0-9_-]{43}$/.test(signature)) throw new Error("Invalid native group sample button.");
+  const expected = crypto.createHmac("sha256", groupActionKey()).update(payload).digest();
+  const supplied = Buffer.from(signature, "base64url");
+  if (supplied.length !== expected.length || !crypto.timingSafeEqual(expected, supplied)) throw new Error("Invalid native group sample button.");
+  const parsed = JSON.parse(Buffer.from(payload, "base64url").toString("utf8"));
+  if (!Array.isArray(parsed) || parsed.length !== 8 || parsed[0] !== 3 || typeof parsed[2] !== "string" || !parsed[2] || !/^[a-f0-9]{32}$/.test(parsed[4]) || !/^[A-Za-z0-9_-]{22}$/.test(parsed[5]) || typeof parsed[6] !== "string" || !["a", "c"].includes(parsed[7])) throw new Error("Invalid native group sample button.");
+  return { recordId: assertRecordId(parsed[1]), jobId: parsed[2], customerRecipientChatId: sampleRecipient(parsed[3]), recipientChatId: sampleGroupRecipient(`${parsed[6]}@g.us`), submissionId: parsed[4], fingerprint: parsed[5], action: parsed[7] === "a" ? "approve" : "comment" };
 }
