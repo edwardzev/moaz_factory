@@ -6,14 +6,14 @@ import nativeHandler from "../api/sample-native-reply.js";
 import sendHandler from "../api/send-sample.js";
 import {
   configuredSampleGroup, createNativeGroupSampleButton, createNativeSampleButton,
-  verifyNativeSampleButton, sampleFingerprint,
+  verifyNativeSampleButton, sampleFingerprint, PM_SAMPLE_LINE_ID,
 } from "../api/_native-sample-replies.js";
 
 const groupId = "120363414125815359@g.us";
 const recordId = "recJS7xwhFXHaoPJd";
 const customerChatId = "972546969974@s.whatsapp.net";
 const participantChatId = "972500000001@s.whatsapp.net";
-const issuer = { organizationId: "org-fixture", lineId: "line-fixture", bindingGeneration: "generation-fixture", activationId: "activation-fixture" };
+const issuer = { organizationId: "org-fixture", lineId: PM_SAMPLE_LINE_ID, bindingGeneration: "generation-fixture", activationId: "activation-fixture" };
 const callbackSecret = "fixture-callback-secret-of-at-least-32-bytes";
 const savedAssets = [
   { id: "attABCDEFGHIJKLMN", url: "https://dl.airtable.com/image-one", filename: "one.jpg", type: "image/jpeg" },
@@ -126,6 +126,7 @@ test("sample submission adds configured group capabilities without changing cust
   const restoreEnv = setupEnv();
   const oldFetch = globalThis.fetch;
   const fields = { "JOB ID": 48441, "Clean phone number": "972546969974", "Client name text": "לקוח לדוגמה",
+    "Client name": ["recABCDEFGHIJKLMN"],
     Sample: savedAssets, "Send sample link": "https://connect.pabbly.com/workflow/sendwebhookdata/test" };
   const posts = [];
   globalThis.fetch = async (url, init = {}) => {

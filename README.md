@@ -53,21 +53,27 @@ existing `Send sample link` Pabbly webhook with deterministic idempotency.
 An explicit `sample_assets_encoded` URI-encoded JSON copy survives Pabbly's
 simple-response flattening. A Code step decodes it into the media loop's array;
 the original array and JSON copy remain available for compatibility.
-Pabbly uses the preserved PM Notifications credential directly in its text/media
-actions. Platform requires an explicit managed-provider capability grant and
+Pabbly selects the customer sender from the exact linked client as described
+below. Platform requires an explicit managed-provider capability grant and
 privately archives the selected media before queueing. Submission acceptance
 is not a delivery claim.
 
 One WhatsApp message displays native **Approve** and **Comment** quick-reply
 buttons together, without opening a browser. Approve writes
 `Sample approved by client=true` and `Main Flow=Sample Approved` on the exact
-order. Comment keeps the customer in the PM Notifications chat
-(`+972559664485`) to type their feedback; no Airtable comment field is created.
+order. Comment keeps the customer in the same sending chat to type their
+feedback; no Airtable comment field is created.
 
 `POST /api/sample-native-reply` accepts only the separately signed Platform
 callback (`SAMPLE_NATIVE_REPLY_CALLBACK_SECRET`, at least 32 bytes), fresh
 timestamp, and exact issuer configured in `SAMPLE_NATIVE_REPLY_ISSUER` as JSON
-with `organizationId`, `lineId`, `bindingGeneration`, and `activationId`.
+with `organizationId`, `lineId`, `bindingGeneration`, and `activationId`. The
+existing single issuer object remains accepted. An explicit array may authorize
+several complete issuer tuples; each entry must contain exactly those four
+nonblank identity strings. Empty, duplicate, partial and wildcard entries fail
+closed. One whole tuple must match the callback; fields from different entries
+cannot be combined. Group callbacks remain restricted to the exact PM
+Notifications line, even when an additional customer sender issuer is allowed.
 Button capabilities are signed using the existing sample approval secret,
 bound to the order, clean phone, submission, saved attachment set and action.
 Changed sample/phone/order and forged callbacks fail closed. Repeated approvals
@@ -81,6 +87,33 @@ holds uncertain HTTP outcomes rather than automatically repeating a possible
 Airtable mutation. The old signed confirmation URL remains valid for existing
 messages; no existing token is rotated. Existing order fields/order, links and
 Print sticker remain unchanged.
+
+### Customer sender
+
+The existing `Client name` link is the sender authority. Exactly one linked
+client record is required. The exact Printeam client record
+`recNzGCe4tTdO2oWM` selects **Printeam new**, line
+`fd6c90a8-3316-4283-9eb3-6e434054b668`, phone `+972503969640`. Every other
+single valid client link selects **PM Notifications**, line
+`6befab5d-10e9-40f3-bbb4-6756a56f7e4d`, phone `+972559664485`. Missing,
+malformed or multiple links leave the sender unknown and block submission
+before the workflow is called. Display names and job prefixes do not select a
+line.
+
+The server adds `sample_customer_line_id` to the same webhook submission and
+points the compatibility Comment URL at that sender's phone. Caller-provided
+routing fields are ignored. The shared workflow independently verifies the
+Airtable link and routes customer media, readiness checks and native buttons
+through the selected line's preserved credential. The `ms2` / `ms3` signing
+formats and deterministic submission identity do not change.
+
+The SAMPLES copy continues through PM Notifications, including for Printeam
+customers. Its cross-line media dependency must be explicitly authorized and
+verify the selected customer line's accepted media before the group wording
+and buttons can dispatch. Activating the additional customer sender requires
+the exact Platform capability/callback grants, signing registry entry and
+complete receiver issuer tuple; this source change alone does not provision
+those settings or prove delivery.
 
 ### Samples group copy
 

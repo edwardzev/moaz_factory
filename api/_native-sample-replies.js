@@ -3,10 +3,47 @@ import { assertRecordId } from "./_sample-utils.js";
 
 export const CLEAN_PHONE_FIELD_NAME = "Clean phone number";
 export const CLIENT_NAME_FIELD_NAME = "Client name text";
+export const CLIENT_LINK_FIELD_NAME = "Client name";
+export const PRINTEAM_CLIENT_RECORD_ID = "recNzGCe4tTdO2oWM";
+export const PRINTEAM_SAMPLE_LINE_ID = "fd6c90a8-3316-4283-9eb3-6e434054b668";
+export const PM_SAMPLE_LINE_ID = "6befab5d-10e9-40f3-bbb4-6756a56f7e4d";
 const ATTACHMENT_ID = /^att[A-Za-z0-9]{14}$/;
 const INDIVIDUAL_CHAT_ID = /^[1-9][0-9]{7,14}@s\.whatsapp\.net$/;
 const GROUP_CHAT_ID = /^[1-9][0-9]*(?:-[0-9]+)?@g\.us$/;
 const PM_NOTIFICATION_CHAT_ID = "972559664485@s.whatsapp.net";
+const NATIVE_REPLY_ISSUER_FIELDS = ["organizationId", "lineId", "bindingGeneration", "activationId"];
+
+export function sampleCustomerSender(clientLinks) {
+  if (!Array.isArray(clientLinks) || clientLinks.length !== 1 ||
+      typeof clientLinks[0] !== "string" || !/^rec[A-Za-z0-9]{14}$/.test(clientLinks[0])) {
+    const error = new Error("The order needs one exact Client name link before its sample sender can be selected.");
+    error.statusCode = 409;
+    throw error;
+  }
+  return clientLinks[0] === PRINTEAM_CLIENT_RECORD_ID
+    ? { lineId: PRINTEAM_SAMPLE_LINE_ID, phone: "972503969640" }
+    : { lineId: PM_SAMPLE_LINE_ID, phone: "972559664485" };
+}
+
+function configuredNativeReplyIssuers(value) {
+  try {
+    const parsed = JSON.parse(value);
+    const issuers = Array.isArray(parsed) ? parsed : [parsed];
+    if (!issuers.length || issuers.some(issuer =>
+      !issuer || Array.isArray(issuer) || typeof issuer !== "object" ||
+      Object.keys(issuer).length !== NATIVE_REPLY_ISSUER_FIELDS.length ||
+      NATIVE_REPLY_ISSUER_FIELDS.some(key => typeof issuer[key] !== "string" ||
+        !issuer[key] || issuer[key].trim() !== issuer[key] || /[?*]/.test(issuer[key]))
+    )) throw new Error();
+    const identities = issuers.map(issuer => JSON.stringify(NATIVE_REPLY_ISSUER_FIELDS.map(key => issuer[key])));
+    if (new Set(identities).size !== identities.length) throw new Error();
+    return issuers;
+  } catch {
+    const error = new Error("Native sample reply verification is not configured.");
+    error.statusCode = 503;
+    throw error;
+  }
+}
 
 function assertSampleGroup(value) {
   if (typeof value !== "string" || !GROUP_CHAT_ID.test(value) || value.split("@")[0].length > 31) {
@@ -119,8 +156,11 @@ export function verifyNativeReplyEnvelope(rawBody, headers, now = Date.now()) {
   const expected = crypto.createHmac("sha256", secret).update(`${timestamp}.`).update(rawBody).digest();
   if (!crypto.timingSafeEqual(expected, Buffer.from(signature, "hex"))) throw new Error("Invalid native reply authentication.");
   const body = JSON.parse(rawBody.toString("utf8"));
-  const issuer = JSON.parse(issuerText);
-  if (body.version !== "native-reply.v1" || ["organizationId", "lineId", "bindingGeneration", "activationId"].some(key => !issuer[key] || body[key] !== issuer[key])) throw new Error("Invalid native reply issuer.");
+  const issuers = configuredNativeReplyIssuers(issuerText);
+  if (body.version !== "native-reply.v1" ||
+      issuers.filter(issuer => NATIVE_REPLY_ISSUER_FIELDS.every(key => body[key] === issuer[key])).length !== 1) {
+    throw new Error("Invalid native reply issuer.");
+  }
   if (["deliveryId", "originMessageId", "originProviderMessageId", "replyProviderMessageId", "rawEventId", "recipientChatId", "selectedButtonId"].some(key => typeof body[key] !== "string" || !body[key] || body[key].length > 512)) throw new Error("Invalid native reply evidence.");
   const occurredAt = Date.parse(body.occurredAt);
   if (!Number.isFinite(occurredAt) || occurredAt > now + 300_000 || occurredAt < now - 7 * 86400_000) throw new Error("Expired native reply.");

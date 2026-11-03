@@ -9,12 +9,11 @@ import {
 } from "./_sample-utils.js";
 import crypto from "node:crypto";
 import {
-  CLEAN_PHONE_FIELD_NAME, CLIENT_NAME_FIELD_NAME, configuredSampleGroup,
-  createNativeSampleButton, createNativeGroupSampleButton, sampleFingerprint, sampleRecipient,
+  CLEAN_PHONE_FIELD_NAME, CLIENT_NAME_FIELD_NAME, CLIENT_LINK_FIELD_NAME, configuredSampleGroup,
+  createNativeSampleButton, createNativeGroupSampleButton, sampleCustomerSender, sampleFingerprint, sampleRecipient,
 } from "./_native-sample-replies.js";
 
 const PABBLY_HOSTNAME = "connect.pabbly.com";
-const PM_NOTIFICATION_PHONE = "972559664485";
 const ATTACHMENT_ID_PATTERN = /^att[A-Za-z0-9]{14}$/;
 
 function groupNotificationPayload(fields, capability) {
@@ -73,8 +72,10 @@ export default async function handler(req, res) {
       SEND_SAMPLE_LINK_FIELD_NAME,
       CLEAN_PHONE_FIELD_NAME,
       CLIENT_NAME_FIELD_NAME,
+      CLIENT_LINK_FIELD_NAME,
     ]);
     const fields = record?.fields || {};
+    const customerSender = sampleCustomerSender(fields[CLIENT_LINK_FIELD_NAME]);
     const attachments = Array.isArray(fields[SAMPLE_FIELD_NAME]) ? fields[SAMPLE_FIELD_NAME] : [];
     const attachmentsById = new Map(
       attachments
@@ -93,7 +94,7 @@ export default async function handler(req, res) {
     const origin = publicOrigin(req);
     const approvalUrl = `${origin}/api/sample-approve?token=${encodeURIComponent(approvalToken)}`;
     const commentText = `Comment on sample for order ${jobId}: `;
-    const commentUrl = `https://wa.me/${PM_NOTIFICATION_PHONE}?text=${encodeURIComponent(commentText)}`;
+    const commentUrl = `https://wa.me/${customerSender.phone}?text=${encodeURIComponent(commentText)}`;
 
     const selectedAssets = attachmentIds.map(id => {
       const attachment = attachmentsById.get(id);
@@ -151,6 +152,7 @@ export default async function handler(req, res) {
         sample_submission_id: submissionId,
         sample_approve_button_id: approveButtonId,
         sample_comment_button_id: commentButtonId,
+        sample_customer_line_id: customerSender.lineId,
         ...groupPayload,
         sample_assets: selectedAssets,
         // Retain the JSON copy for integrations that already read it. Pabbly

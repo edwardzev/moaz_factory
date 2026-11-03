@@ -5,6 +5,7 @@ import {
 } from "./_sample-utils.js";
 import {
   CLEAN_PHONE_FIELD_NAME, sampleRecipient, sampleFingerprint,
+  PM_SAMPLE_LINE_ID,
   configuredSampleGroup, assertGroupReplyParticipant,
   verifyNativeReplyEnvelope, verifyNativeSampleButton,
 } from "./_native-sample-replies.js";
@@ -40,6 +41,7 @@ export default async function handler(req, res) {
     const action = verifyNativeSampleButton(callback.selectedButtonId);
     if (callback.recipientChatId !== action.recipientChatId) throw new Error("Native reply recipient does not match.");
     if (action.audience === "group") {
+      if (callback.lineId !== PM_SAMPLE_LINE_ID) throw new Error("Native reply group sender is not authorized.");
       if (configuredSampleGroup() !== action.recipientChatId) throw new Error("Native reply group is not authorized.");
       assertGroupReplyParticipant(callback);
     }
