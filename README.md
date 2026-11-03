@@ -53,16 +53,16 @@ existing `Send sample link` Pabbly webhook with deterministic idempotency.
 An explicit `sample_assets_encoded` URI-encoded JSON copy survives Pabbly's
 simple-response flattening. A Code step decodes it into the media loop's array;
 the original array and JSON copy remain available for compatibility.
-Pabbly uses the preserved PM Notifications credential directly in its text/media
-actions. Platform requires an explicit managed-provider capability grant and
+Pabbly uses the preserved credential for the selected customer line directly in
+its text/media actions. Platform requires an explicit managed-provider capability grant and
 privately archives the selected media before queueing. Submission acceptance
 is not a delivery claim.
 
 One WhatsApp message displays native **Approve** and **Comment** quick-reply
 buttons together, without opening a browser. Approve writes
 `Sample approved by client=true` and `Main Flow=Sample Approved` on the exact
-order. Comment keeps the customer in the PM Notifications chat
-(`+972559664485`) to type their feedback; no Airtable comment field is created.
+order. Comment keeps the customer in the same sending-line WhatsApp chat to
+type their feedback; no Airtable comment field is created.
 
 `POST /api/sample-native-reply` accepts only the separately signed Platform
 callback (`SAMPLE_NATIVE_REPLY_CALLBACK_SECRET`, at least 32 bytes), fresh
@@ -119,3 +119,56 @@ Notifications sender itself is not an eligible group participant. Customer
 `ms2` buttons and callbacks remain compatible without `participantChatId`.
 Changing/removing the configured group invalidates old group buttons without
 changing existing customer buttons or tokens.
+
+### Printeam customer sender
+
+New submissions choose the customer sending line from the saved linked
+`Client name` record IDs, not `Client name text`, `Job Name`, a job prefix, or
+caller-supplied routing. Exactly one link to Printeam
+(`recNzGCe4tTdO2oWM`) selects **Printeam new**
+(`fd6c90a8-3316-4283-9eb3-6e434054b668`, `+972503969640`). A valid link array
+containing no Printeam record retains **PM Notifications**
+(`6befab5d-10e9-40f3-bbb4-6756a56f7e4d`, `+972559664485`). Missing/malformed
+links and Printeam combined with any other link block submission for review;
+they never silently fall back to PM. The existing `Clean phone number`
+recipient and exact selected assets are unchanged.
+
+PM submission IDs retain the original record-plus-selected-attachment hash.
+Printeam submission IDs additionally bind the stable `moaz-printeam-sample-v4`
+domain and exact Printeam line ID. Repeating the same selection on the same
+route retains its ID; selecting the new Printeam route for assets previously
+sent from PM produces a distinct ID, including distinct PM group idempotency
+keys for that submission's cross-line media dependencies.
+
+The UI sends `submissionProtocol: "moaz-sample-routing-v4"`. A new Printeam
+request without that exact marker returns `409` before posting to the workflow,
+with an instruction to refresh and review any prior or uncertain send. This
+prevents an already-open pre-cutover browser from automatically turning its
+old PM retry into a new Printeam intent. The marker is only a cutover
+compatibility check: it cannot select a sender or change the saved recipient.
+Old non-Printeam requests and previously issued native callbacks remain
+compatible. The existing service worker fetches the app shell network-first,
+never caches `/api/*`, and does not reload or resubmit pending work on its own.
+
+The webhook adds server-derived `sample_customer_sender` (`printeam` or `pm`)
+and `sample_customer_line_id`. The workflow must select the matching existing
+line credential for **all** customer media and native buttons. The SAMPLES
+media, wording, and group buttons remain on PM Notifications. Platform must
+have an explicit exact-scope cross-line dependency grant before its PM group
+confirmation can depend on Printeam customer media; changing only a sender URL
+or weakening the existing media acceptance guard is not sufficient.
+
+Printeam customer buttons use the distinct compact `ms4` signing domain. They
+require the separately configured `SAMPLE_PRINTEAM_NATIVE_REPLY_ISSUER` JSON
+object with `organizationId`, `lineId`, `bindingGeneration`, and `activationId`,
+reusing `SAMPLE_NATIVE_REPLY_CALLBACK_SECRET` unchanged. The additional issuer
+is restricted to the named Printeam line and organization; missing/invalid
+configuration blocks a new Printeam submission without disabling PM sends.
+The receiver derives the authenticated sender from the exact configured issuer,
+requires Printeam for `ms4`, and freshly checks the exact linked Printeam client
+before either action. A customer-link change invalidates that new button.
+Existing `ms2` customer buttons and `ms3` group buttons remain PM-issuer-only
+and keep their existing compatibility behavior, including previously issued PM
+buttons for an order whose linked customer is now Printeam. No token, approval
+secret, Airtable field, field order, existing order link, or sticker action is
+changed by this routing contract.

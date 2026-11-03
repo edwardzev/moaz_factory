@@ -8,6 +8,7 @@ import {
   configuredSampleGroup, assertGroupReplyParticipant,
   verifyNativeReplyEnvelope, verifyNativeSampleButton,
 } from "./_native-sample-replies.js";
+import { CLIENT_LINK_FIELD_NAME, sampleCustomerRoute } from "./_sample-customer-routing.js";
 
 export const config = { api: { bodyParser: false } };
 
@@ -38,13 +39,17 @@ export default async function handler(req, res) {
   try {
     const callback = verifyNativeReplyEnvelope(await rawBody(req), req.headers || {});
     const action = verifyNativeSampleButton(callback.selectedButtonId);
+    if (callback.sampleReplySender !== (action.sender || "pm")) throw new Error("Native reply sender does not match the issued sample button.");
     if (callback.recipientChatId !== action.recipientChatId) throw new Error("Native reply recipient does not match.");
     if (action.audience === "group") {
       if (configuredSampleGroup() !== action.recipientChatId) throw new Error("Native reply group is not authorized.");
       assertGroupReplyParticipant(callback);
     }
-    const record = await airtableOperation(() => readAirtableRecord(action.recordId, [JOB_ID_FIELD_NAME, CLEAN_PHONE_FIELD_NAME, SAMPLE_FIELD_NAME, SAMPLE_APPROVED_FIELD_NAME, MAIN_FLOW_FIELD_NAME]));
+    const record = await airtableOperation(() => readAirtableRecord(action.recordId, [JOB_ID_FIELD_NAME, CLEAN_PHONE_FIELD_NAME, SAMPLE_FIELD_NAME, SAMPLE_APPROVED_FIELD_NAME, MAIN_FLOW_FIELD_NAME, CLIENT_LINK_FIELD_NAME]));
     const fields = record.fields || {};
+    if (action.sender === "printeam" && sampleCustomerRoute(fields).sender !== "printeam") {
+      return res.status(409).json({ error: "The order's linked customer has changed. Send a new sample." });
+    }
     const expectedCustomer = action.audience === "group" ? sampleRecipient(action.customerPhone) : action.recipientChatId;
     if (String(fields[JOB_ID_FIELD_NAME] ?? "") !== action.jobId || sampleRecipient(fields[CLEAN_PHONE_FIELD_NAME]) !== expectedCustomer || sampleFingerprint(fields[SAMPLE_FIELD_NAME]) !== action.fingerprint) {
       return res.status(409).json({ error: "The order, recipient, or sample has changed. Send a new sample." });
@@ -71,6 +76,10 @@ export default async function handler(req, res) {
   } catch (error) {
     const status = error?.statusCode || 400;
     // Never echo signed button IDs, HMAC values, or Airtable error bodies.
-    return res.status(status >= 500 ? 503 : 400).json({ error: status >= 500 ? "Native sample reply is temporarily unavailable." : "Invalid native sample reply." });
+    return res.status(status >= 500 ? 503 : status === 409 ? 409 : 400).json({
+      error: status >= 500 ? "Native sample reply is temporarily unavailable."
+        : status === 409 ? "The order's linked customer has changed. Send a new sample."
+          : "Invalid native sample reply.",
+    });
   }
 }

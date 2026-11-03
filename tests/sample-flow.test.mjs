@@ -16,7 +16,7 @@ test("full selected image/video flow uploads, submits exact assets, and confirms
   const env = Object.fromEntries(["AIRTABLE_TOKEN", "SAMPLE_APPROVAL_SECRET", "MOAZ_PUBLIC_URL"].map(key => [key, process.env[key]]));
   Object.assign(process.env, { AIRTABLE_TOKEN: "fixture", SAMPLE_APPROVAL_SECRET: "fixture-signing", MOAZ_PUBLIC_URL: "https://moaz.example" });
   const recordId = "recJS7xwhFXHaoPJd";
-  const fields = { "JOB ID": 48441, "Clean phone number": "972546969974", "Main Flow": "Truck left", Sample: [], "Send sample link": "https://connect.pabbly.com/workflow/sendwebhookdata/fixture" };
+  const fields = { "JOB ID": 48441, "Clean phone number": "972546969974", "Client name": ["recABCDEFGHIJKLMN"], "Main Flow": "Truck left", Sample: [], "Send sample link": "https://connect.pabbly.com/workflow/sendwebhookdata/fixture" };
   const attachmentIds = ["attABCDEFGHIJKLMN", "attNOPQRSTUVWXYZA"];
   const patches = [], submissions = [];
   let uploads = 0, ambiguousUpload = false, workflowStatus = 200;
