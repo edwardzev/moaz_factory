@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import vm from "node:vm";
 import test from "node:test";
+import { SAMPLE_SUBMISSION_PROTOCOL } from "../api/_sample-customer-routing.js";
 
 const source = await readFile(new URL("../public/app.js", import.meta.url), "utf8");
 const messageStart = source.indexOf("function setSampleMessage(");
@@ -9,7 +10,10 @@ const messageEnd = source.indexOf("function addSampleFiles(", messageStart);
 const submitStart = source.indexOf("async function submitSample(");
 const submitEnd = source.indexOf("function attachmentsList(", submitStart);
 assert.ok(messageStart >= 0 && messageEnd > messageStart && submitStart >= 0 && submitEnd > submitStart);
-const sampleFunctions = `${source.slice(messageStart, messageEnd)}\n${source.slice(submitStart, submitEnd)}`;
+const protocolDeclaration = source.match(/^const SAMPLE_SUBMISSION_PROTOCOL = ("[^"]+");$/m);
+assert.ok(protocolDeclaration);
+assert.equal(JSON.parse(protocolDeclaration[1]), SAMPLE_SUBMISSION_PROTOCOL);
+const sampleFunctions = `${protocolDeclaration[0]}\n${source.slice(messageStart, messageEnd)}\n${source.slice(submitStart, submitEnd)}`;
 
 function element() {
   const attributes = {};
@@ -33,7 +37,7 @@ function uiContext(result, { status = 202 } = {}) {
     fetch: async (url, options) => {
       requests++;
       assert.equal(url, "/api/send-sample");
-      assert.deepEqual(JSON.parse(options.body), { id: "recJS7xwhFXHaoPJd", attachmentIds: ["attABCDEFGHIJKLMN"] });
+      assert.deepEqual(JSON.parse(options.body), { id: "recJS7xwhFXHaoPJd", attachmentIds: ["attABCDEFGHIJKLMN"], submissionProtocol: SAMPLE_SUBMISSION_PROTOCOL });
       return new Response(JSON.stringify(result), { status });
     },
     uploadSampleFile: async () => { throw new Error("Already saved files must not be uploaded again."); },
@@ -48,7 +52,7 @@ test("configured group unavailability is a persistent operator alert without rep
   const reason = "The order has no single nonblank Client name text value. No group notification may be sent.";
   const ui = uiContext({ ok: true, submitted: true, jobId: "48441", groupNotification: { requested: true, status: "unavailable", reason } });
   await ui.context.submitSample();
-  assert.match(ui.context.sampleMessage.textContent, /was submitted to the PM WhatsApp workflow/);
+  assert.match(ui.context.sampleMessage.textContent, /was submitted to the WhatsApp workflow/);
   assert.ok(ui.context.sampleMessage.textContent.includes(`Group notification was not submitted: ${reason}`));
   assert.match(ui.context.sampleMessage.textContent, /Do not resubmit/);
   assert.equal(ui.context.sampleMessage.attributes.role, "alert");

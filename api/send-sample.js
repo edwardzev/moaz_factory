@@ -10,11 +10,12 @@ import {
 import crypto from "node:crypto";
 import {
   CLEAN_PHONE_FIELD_NAME, CLIENT_NAME_FIELD_NAME, configuredSampleGroup,
-  createNativeSampleButton, createNativeGroupSampleButton, sampleFingerprint, sampleRecipient,
+  createNativeSampleButton, createNativePrinteamSampleButton, createNativeGroupSampleButton,
+  configuredPrinteamNativeReplyIssuer, sampleFingerprint, sampleRecipient,
 } from "./_native-sample-replies.js";
+import { CLIENT_LINK_FIELD_NAME, SAMPLE_SUBMISSION_PROTOCOL, sampleCustomerRoute } from "./_sample-customer-routing.js";
 
 const PABBLY_HOSTNAME = "connect.pabbly.com";
-const PM_NOTIFICATION_PHONE = "972559664485";
 const ATTACHMENT_ID_PATTERN = /^att[A-Za-z0-9]{14}$/;
 
 function groupNotificationPayload(fields, capability) {
@@ -73,8 +74,18 @@ export default async function handler(req, res) {
       SEND_SAMPLE_LINK_FIELD_NAME,
       CLEAN_PHONE_FIELD_NAME,
       CLIENT_NAME_FIELD_NAME,
+      CLIENT_LINK_FIELD_NAME,
     ]);
     const fields = record?.fields || {};
+    const customerRoute = sampleCustomerRoute(fields);
+    if (customerRoute.sender === "printeam") {
+      if (req.body?.submissionProtocol !== SAMPLE_SUBMISSION_PROTOCOL) {
+        return res.status(409).json({
+          error: "The sample sending line has changed. Refresh this page and review any previous or uncertain sample send before submitting again. No WhatsApp submission was made by this request.",
+        });
+      }
+      configuredPrinteamNativeReplyIssuer({ required: true });
+    }
     const attachments = Array.isArray(fields[SAMPLE_FIELD_NAME]) ? fields[SAMPLE_FIELD_NAME] : [];
     const attachmentsById = new Map(
       attachments
@@ -93,7 +104,7 @@ export default async function handler(req, res) {
     const origin = publicOrigin(req);
     const approvalUrl = `${origin}/api/sample-approve?token=${encodeURIComponent(approvalToken)}`;
     const commentText = `Comment on sample for order ${jobId}: `;
-    const commentUrl = `https://wa.me/${PM_NOTIFICATION_PHONE}?text=${encodeURIComponent(commentText)}`;
+    const commentUrl = `https://wa.me/${customerRoute.phone}?text=${encodeURIComponent(commentText)}`;
 
     const selectedAssets = attachmentIds.map(id => {
       const attachment = attachmentsById.get(id);
@@ -112,9 +123,16 @@ export default async function handler(req, res) {
         mediaKind: contentType.startsWith("video/") ? "video" : "image",
       };
     });
+    const originalSubmissionIdentity = `${recordId}\n${attachmentIds.join(",")}`;
+    // Preserve existing PM idempotency exactly. A new Printeam route is a
+    // distinct submission even for assets previously sent from PM, so its
+    // PM group dependency metadata cannot collide with the earlier send.
+    const submissionIdentity = customerRoute.sender === "printeam"
+      ? `${originalSubmissionIdentity}\nmoaz-printeam-sample-v4\n${customerRoute.lineId}`
+      : originalSubmissionIdentity;
     const submissionId = crypto
       .createHash("sha256")
-      .update(`${recordId}\n${attachmentIds.join(",")}`)
+      .update(submissionIdentity)
       .digest("hex")
       .slice(0, 32);
 
@@ -123,8 +141,9 @@ export default async function handler(req, res) {
       recipientChatId: sampleRecipient(fields[CLEAN_PHONE_FIELD_NAME]),
       fingerprint: sampleFingerprint(attachments),
     };
-    const approveButtonId = createNativeSampleButton({ ...replyCapability, action: "approve" });
-    const commentButtonId = createNativeSampleButton({ ...replyCapability, action: "comment" });
+    const customerButton = customerRoute.sender === "printeam" ? createNativePrinteamSampleButton : createNativeSampleButton;
+    const approveButtonId = customerButton({ ...replyCapability, action: "approve" });
+    const commentButtonId = customerButton({ ...replyCapability, action: "comment" });
     const groupPayload = groupNotificationPayload(fields, replyCapability);
     // Derive this only from the server's configured group and saved Airtable
     // fields. Caller-supplied group status is never an authority.
@@ -149,6 +168,8 @@ export default async function handler(req, res) {
         sample_job_id: jobId,
         sample_attachment_ids: attachmentIds.join(","),
         sample_submission_id: submissionId,
+        sample_customer_sender: customerRoute.sender,
+        sample_customer_line_id: customerRoute.lineId,
         sample_approve_button_id: approveButtonId,
         sample_comment_button_id: commentButtonId,
         ...groupPayload,

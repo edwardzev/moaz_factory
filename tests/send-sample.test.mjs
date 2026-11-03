@@ -42,6 +42,7 @@ test("Send Sample posts only the selected Airtable assets to Pabbly", async () =
         fields: {
           "JOB ID": "48441",
           "Clean phone number": "972546969974",
+          "Client name": ["recABCDEFGHIJKLMN"],
           Sample: [
             {
               id: "attABCDEFGHIJKLMN",

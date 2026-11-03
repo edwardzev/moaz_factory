@@ -125,7 +125,7 @@ test("group sample callbacks require exact signed scope, participant, customer a
 test("sample submission adds configured group capabilities without changing customer assets or inventing names", async () => {
   const restoreEnv = setupEnv();
   const oldFetch = globalThis.fetch;
-  const fields = { "JOB ID": 48441, "Clean phone number": "972546969974", "Client name text": "לקוח לדוגמה",
+  const fields = { "JOB ID": 48441, "Clean phone number": "972546969974", "Client name": ["recABCDEFGHIJKLMN"], "Client name text": "לקוח לדוגמה",
     Sample: savedAssets, "Send sample link": "https://connect.pabbly.com/workflow/sendwebhookdata/test" };
   const posts = [];
   globalThis.fetch = async (url, init = {}) => {

@@ -55,6 +55,7 @@ let sampleSubmissionAccepted = false;
 const materialUpdateInFlight = new Set();
 
 const MAX_SAMPLE_FILE_BYTES = 4_400_000;
+const SAMPLE_SUBMISSION_PROTOCOL = "moaz-sample-routing-v4";
 
 const VIEW_MODES = {
   list: {
@@ -682,13 +683,14 @@ async function submitSample() {
       body: JSON.stringify({
         id: sampleRow.id,
         attachmentIds: pendingSampleFiles.map(item => item.attachmentId),
+        submissionProtocol: SAMPLE_SUBMISSION_PROTOCOL,
       }),
     });
     const result = await response.json().catch(() => ({}));
     if (!response.ok) throw new Error(result?.error || "The WhatsApp workflow did not accept the submission.");
 
     sampleSubmissionAccepted = true;
-    const submittedMessage = `Sample for order ${result.jobId || sampleRow.jobId || ""} was submitted to the PM WhatsApp workflow.`;
+    const submittedMessage = `Sample for order ${result.jobId || sampleRow.jobId || ""} was submitted to the WhatsApp workflow.`;
     if (submitLabel) submitLabel.textContent = "Submitted ✓";
     if (result.groupNotification?.status === "unavailable") {
       const reason = result.groupNotification.reason || "The configured group copy is unavailable.";
