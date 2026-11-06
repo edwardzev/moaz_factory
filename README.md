@@ -172,3 +172,30 @@ and keep their existing compatibility behavior, including previously issued PM
 buttons for an order whose linked customer is now Printeam. No token, approval
 secret, Airtable field, field order, existing order link, or sticker action is
 changed by this routing contract.
+
+### Customer approval notices
+
+The shared native reply endpoint can queue a text notice to **SAMPLES** and
+**North** when the customer taps **Approve** in either the PM Notifications or
+Printeam new chat. It uses the saved Airtable `Client name text`, `Job Name`,
+and `JOB ID` exactly: “{customer} approved sample of {job name} {job id}”.
+Missing or ambiguous text does not prevent the approval but suppresses the
+notices. Group-member approvals, Comment, and legacy confirmation links keep
+their existing behavior without sending these notices. If the group approved
+first, a later verified customer tap can still announce the approval while
+the order is in Sample Approved; later stages are not moved backwards.
+
+Off by default. Before enabling `SAMPLE_APPROVAL_NOTICES_ENABLED=true`, confirm
+the existing SAMPLES ID in `SAMPLE_NOTIFICATION_GROUP_ID` and the separately
+verified North group ID in `SAMPLE_APPROVAL_NOTICE_NORTH_GROUP_ID`. Both groups
+must be distinct and explicitly permitted on PM Notifications. Configure
+`SAMPLE_APPROVAL_NOTICE_PM_TOKEN` as a server-only secret for the existing
+approved PM notification token. The callback verifies the token's exact
+sending line with passive health before posting either notice. Do not rotate
+existing sender credentials or bypass Platform's group permission checks.
+
+The two independent queue requests use permanent Platform idempotency keys
+based on the exact order, sample submission and group. Queue acceptance is not
+WhatsApp delivery. Notice failures or unknown outcomes are reported separately
+in the callback receipt and a metadata-only warning; approval is not rolled
+back and there is no automatic resend.
