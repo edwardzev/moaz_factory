@@ -142,8 +142,11 @@ export default async function handler(req, res) {
       fingerprint: sampleFingerprint(attachments),
     };
     const customerButton = customerRoute.sender === "printeam" ? createNativePrinteamSampleButton : createNativeSampleButton;
-    const approveButtonId = customerButton({ ...replyCapability, action: "approve" });
-    const commentButtonId = customerButton({ ...replyCapability, action: "comment" });
+    // Provenance is server-issued and authenticated by the shared callback.
+    // Untagged older buttons stay valid without acquiring a factory route.
+    const provenance = process.env.SAMPLE_APPROVAL_NOTICES_ENABLED === "true" ? { producer: "moaz" } : {};
+    const approveButtonId = customerButton({ ...replyCapability, ...provenance, action: "approve" });
+    const commentButtonId = customerButton({ ...replyCapability, ...provenance, action: "comment" });
     const groupPayload = groupNotificationPayload(fields, replyCapability);
     // Derive this only from the server's configured group and saved Airtable
     // fields. Caller-supplied group status is never an authority.

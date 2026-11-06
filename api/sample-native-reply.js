@@ -4,11 +4,12 @@ import {
   readAirtableRecord, patchAirtableRecord,
 } from "./_sample-utils.js";
 import {
-  CLEAN_PHONE_FIELD_NAME, CLIENT_NAME_FIELD_NAME, sampleRecipient, sampleFingerprint,
+  CLEAN_PHONE_FIELD_NAME, sampleRecipient, sampleFingerprint,
   configuredSampleGroup, assertGroupReplyParticipant,
   verifyNativeReplyEnvelope, verifyNativeSampleButton,
 } from "./_native-sample-replies.js";
 import { CLIENT_LINK_FIELD_NAME, sampleCustomerRoute } from "./_sample-customer-routing.js";
+import { SAMPLE_APPROVAL_NOTICE_FIELDS, recordApprovalNotices } from "./_sample-approval-notices.js";
 import { notifyCustomerSampleApproval } from "../lib/sample-approval-notices.js";
 
 export const config = { api: { bodyParser: false } };
@@ -34,12 +35,6 @@ async function airtableOperation(operation) {
   }
 }
 
-async function approvalReceipt(callback, action, fields, result, approvalConfirmed) {
-  const approvalNotices = await notifyCustomerSampleApproval({ callback, action, fields, approvalConfirmed });
-  return { ok: true, deliveryId: callback.deliveryId, action: "approve", ...result,
-    ...(approvalNotices ? { approvalNotices } : {}) };
-}
-
 export default async function handler(req, res) {
   res.setHeader("Cache-Control", "no-store");
   if (req.method !== "POST") return res.status(405).end();
@@ -52,10 +47,7 @@ export default async function handler(req, res) {
       if (configuredSampleGroup() !== action.recipientChatId) throw new Error("Native reply group is not authorized.");
       assertGroupReplyParticipant(callback);
     }
-    const record = await airtableOperation(() => readAirtableRecord(action.recordId, [
-      JOB_ID_FIELD_NAME, CLEAN_PHONE_FIELD_NAME, SAMPLE_FIELD_NAME, SAMPLE_APPROVED_FIELD_NAME,
-      MAIN_FLOW_FIELD_NAME, CLIENT_LINK_FIELD_NAME, CLIENT_NAME_FIELD_NAME, "Job Name",
-    ]));
+    const record = await airtableOperation(() => readAirtableRecord(action.recordId, [JOB_ID_FIELD_NAME, CLEAN_PHONE_FIELD_NAME, SAMPLE_FIELD_NAME, SAMPLE_APPROVED_FIELD_NAME, MAIN_FLOW_FIELD_NAME, CLIENT_LINK_FIELD_NAME, ...(action.producer === "ahmed" || action.producer === "moaz" ? SAMPLE_APPROVAL_NOTICE_FIELDS : [])]));
     const fields = record.fields || {};
     if (action.sender === "printeam" && sampleCustomerRoute(fields).sender !== "printeam") {
       return res.status(409).json({ error: "The order's linked customer has changed. Send a new sample." });
@@ -70,22 +62,30 @@ export default async function handler(req, res) {
       // Airtable field or duplicated outbound prompt is introduced.
       return res.status(200).json({ ok: true, deliveryId: callback.deliveryId, action: "comment", commentInWhatsApp: true });
     }
-    if (fields[SAMPLE_APPROVED_FIELD_NAME] === true) {
+    const alreadyApproved = fields[SAMPLE_APPROVED_FIELD_NAME] === true;
+    let approvalConfirmed = alreadyApproved;
+    if (alreadyApproved) {
       // Do not retrigger Airtable automations or move a subsequently advanced
       // order backwards when a delivery is repeated after an uncertain HTTP.
       if (fields[MAIN_FLOW_FIELD_NAME] !== SAMPLE_APPROVED_MAIN_FLOW_VALUE) {
         return res.status(409).json({ error: "The order is already checked as approved but its Main Flow differs. Review the order before sending another sample." });
       }
-      return res.status(200).json(await approvalReceipt(callback, action, fields, { alreadyApproved: true }, true));
+    } else {
+      const saved = await airtableOperation(() => patchAirtableRecord(action.recordId, {
+        [SAMPLE_APPROVED_FIELD_NAME]: true,
+        [MAIN_FLOW_FIELD_NAME]: SAMPLE_APPROVED_MAIN_FLOW_VALUE,
+      }));
+      approvalConfirmed = saved?.id === action.recordId
+        && saved.fields?.[SAMPLE_APPROVED_FIELD_NAME] === true
+        && saved.fields?.[MAIN_FLOW_FIELD_NAME] === SAMPLE_APPROVED_MAIN_FLOW_VALUE;
     }
-    const saved = await airtableOperation(() => patchAirtableRecord(action.recordId, {
-      [SAMPLE_APPROVED_FIELD_NAME]: true,
-      [MAIN_FLOW_FIELD_NAME]: SAMPLE_APPROVED_MAIN_FLOW_VALUE,
-    }));
-    const confirmed = saved?.id === action.recordId
-      && saved.fields?.[SAMPLE_APPROVED_FIELD_NAME] === true
-      && saved.fields?.[MAIN_FLOW_FIELD_NAME] === SAMPLE_APPROVED_MAIN_FLOW_VALUE;
-    return res.status(200).json(await approvalReceipt(callback, action, fields, { approved: true }, confirmed));
+    const notices = action.producer === "ahmed"
+      ? await recordApprovalNotices({ ...action, fields, occurredAt: callback.occurredAt })
+      : await notifyCustomerSampleApproval({ action, callback, fields, approvalConfirmed });
+    return res.status(200).json({ ok: true, deliveryId: callback.deliveryId, action: "approve",
+      ...(alreadyApproved ? { alreadyApproved: true } : { approved: true }),
+      ...(notices ? { approvalNotices: notices } : {}),
+    });
   } catch (error) {
     const status = error?.statusCode || 400;
     // Never echo signed button IDs, HMAC values, or Airtable error bodies.

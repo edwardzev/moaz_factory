@@ -120,6 +120,41 @@ Notifications sender itself is not an eligible group participant. Customer
 Changing/removing the configured group invalidates old group buttons without
 changing existing customer buttons or tokens.
 
+### Customer approval notices
+
+PM Notifications queues `{customer} approved sample of {job name} {job id}`
+using the saved Airtable `Client name text`, `Job Name`, and `JOB ID`.
+The factory route comes from the signed customer capability:
+
+- Ahmed-issued customer Approve or fallback confirmation → SAMPLES and South.
+- Moaz-issued customer Approve → SAMPLES and PM- NOTRH.
+
+Group-member approvals, Comment, and untagged legacy capabilities continue
+their existing behavior without queueing a notice. A later verified Moaz
+customer tap can announce a sample already approved by the group while the
+order is still in Sample Approved; later stages are not moved backwards.
+
+Deploy this receiver before enabling `SAMPLE_APPROVAL_NOTICE_PROVENANCE=ahmed`
+on Ahmed. To enable the notices, configure `SAMPLE_APPROVAL_NOTICES_SINCE`
+as the UTC cutover time and set `SAMPLE_APPROVAL_PM_TOKEN` to the existing
+PM Notifications Platform API credential. The line must be a member of both
+groups and have the exact Platform grants for them.
+
+Moaz's North notices are off by default. Confirm `SAMPLE_NOTIFICATION_GROUP_ID`
+is the existing SAMPLES group and `SAMPLE_APPROVAL_NOTICE_NORTH_GROUP_ID` is
+the verified PM- NOTRH group. Both must have exact grants on PM Notifications.
+Set `SAMPLE_APPROVAL_NOTICE_PM_TOKEN` to the existing PM token as a
+production-only server secret. `SAMPLE_APPROVAL_NOTICES_ENABLED=true` enables
+Moaz notice dispatch and tags newly issued Moaz customer buttons. Before
+queueing either notice, passive health must confirm the exact PM sending line.
+Existing submission IDs and previously issued buttons are unchanged; do not
+resubmit old samples merely to tag their buttons.
+
+Both factory routes use the same permanent Platform idempotency namespace
+for the record, saved sample and destination. SAMPLES cannot receive a second
+copy for that identity. Unconfirmed notices are logged separately from the
+approval result; queue acceptance is not delivery.
+
 ### Printeam customer sender
 
 New submissions choose the customer sending line from the saved linked
@@ -172,30 +207,3 @@ and keep their existing compatibility behavior, including previously issued PM
 buttons for an order whose linked customer is now Printeam. No token, approval
 secret, Airtable field, field order, existing order link, or sticker action is
 changed by this routing contract.
-
-### Customer approval notices
-
-The shared native reply endpoint can queue a text notice to **SAMPLES** and
-**North** when the customer taps **Approve** in either the PM Notifications or
-Printeam new chat. It uses the saved Airtable `Client name text`, `Job Name`,
-and `JOB ID` exactly: “{customer} approved sample of {job name} {job id}”.
-Missing or ambiguous text does not prevent the approval but suppresses the
-notices. Group-member approvals, Comment, and legacy confirmation links keep
-their existing behavior without sending these notices. If the group approved
-first, a later verified customer tap can still announce the approval while
-the order is in Sample Approved; later stages are not moved backwards.
-
-Off by default. Before enabling `SAMPLE_APPROVAL_NOTICES_ENABLED=true`, confirm
-the existing SAMPLES ID in `SAMPLE_NOTIFICATION_GROUP_ID` and the separately
-verified North group ID in `SAMPLE_APPROVAL_NOTICE_NORTH_GROUP_ID`. Both groups
-must be distinct and explicitly permitted on PM Notifications. Configure
-`SAMPLE_APPROVAL_NOTICE_PM_TOKEN` as a server-only secret for the existing
-approved PM notification token. The callback verifies the token's exact
-sending line with passive health before posting either notice. Do not rotate
-existing sender credentials or bypass Platform's group permission checks.
-
-The two independent queue requests use permanent Platform idempotency keys
-based on the exact order, sample submission and group. Queue acceptance is not
-WhatsApp delivery. Notice failures or unknown outcomes are reported separately
-in the callback receipt and a metadata-only warning; approval is not rolled
-back and there is no automatic resend.

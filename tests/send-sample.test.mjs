@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import handler from "../api/send-sample.js";
+import { verifyNativeSampleButton } from "../api/_native-sample-replies.js";
 
 function responseRecorder() {
   return {
@@ -26,12 +27,14 @@ test("Send Sample posts only the selected Airtable assets to Pabbly", async () =
   const originalEnv = {
     AIRTABLE_TOKEN: process.env.AIRTABLE_TOKEN,
     SAMPLE_APPROVAL_SECRET: process.env.SAMPLE_APPROVAL_SECRET,
+    SAMPLE_APPROVAL_NOTICES_ENABLED: process.env.SAMPLE_APPROVAL_NOTICES_ENABLED,
     MOAZ_PUBLIC_URL: process.env.MOAZ_PUBLIC_URL,
   };
   const pabblyRequests = [];
 
   process.env.AIRTABLE_TOKEN = "test-airtable-token";
   process.env.SAMPLE_APPROVAL_SECRET = "test-approval-secret";
+  process.env.SAMPLE_APPROVAL_NOTICES_ENABLED = "true";
   process.env.MOAZ_PUBLIC_URL = "https://moaz.example";
 
   globalThis.fetch = async (url, init = {}) => {
@@ -121,6 +124,8 @@ test("Send Sample posts only the selected Airtable assets to Pabbly", async () =
     assert.match(payload.comment_url, /^https:\/\/wa\.me\/972559664485\?text=/);
     assert.match(payload.sample_approve_button_id, /^ms2\./);
     assert.match(payload.sample_comment_button_id, /^ms2\./);
+    assert.equal(verifyNativeSampleButton(payload.sample_approve_button_id).producer, "moaz");
+    assert.equal(verifyNativeSampleButton(payload.sample_comment_button_id).producer, "moaz");
     assert.notEqual(payload.sample_approve_button_id, payload.sample_comment_button_id);
     assert.ok(Buffer.byteLength(payload.sample_approve_button_id) <= 256);
   } finally {
