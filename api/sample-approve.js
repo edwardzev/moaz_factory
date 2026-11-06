@@ -1,6 +1,7 @@
 import {
   JOB_ID_FIELD_NAME,
   MAIN_FLOW_FIELD_NAME,
+  SAMPLE_FIELD_NAME,
   SAMPLE_APPROVED_FIELD_NAME,
   SAMPLE_APPROVED_MAIN_FLOW_VALUE,
   htmlEscape,
@@ -8,6 +9,7 @@ import {
   readAirtableRecord,
   verifyApprovalToken,
 } from "./_sample-utils.js";
+import { SAMPLE_APPROVAL_NOTICE_FIELDS, recordApprovalNotices } from "./_sample-approval-notices.js";
 
 function page({ title, body, token = "", confirm = false }) {
   const safeTitle = htmlEscape(title);
@@ -46,7 +48,7 @@ export default async function handler(req, res) {
     const requestUrl = new URL(req.url, "http://localhost");
     const token = requestUrl.searchParams.get("token") || "";
     const approval = verifyApprovalToken(token);
-    const record = await readAirtableRecord(approval.recordId, [JOB_ID_FIELD_NAME]);
+    const record = await readAirtableRecord(approval.recordId, [JOB_ID_FIELD_NAME, SAMPLE_FIELD_NAME, ...SAMPLE_APPROVAL_NOTICE_FIELDS]);
     const currentJobId = String(record?.fields?.[JOB_ID_FIELD_NAME] ?? "");
     if (!currentJobId || currentJobId !== approval.jobId) {
       return res.status(409).send(page({
@@ -68,6 +70,7 @@ export default async function handler(req, res) {
       [SAMPLE_APPROVED_FIELD_NAME]: true,
       [MAIN_FLOW_FIELD_NAME]: SAMPLE_APPROVED_MAIN_FLOW_VALUE,
     });
+    await recordApprovalNotices({ ...approval, fields: record.fields, occurredAt: new Date().toISOString() });
 
     return res.status(200).send(page({
       title: "הדוגמה אושרה",

@@ -9,6 +9,7 @@ import {
   verifyNativeReplyEnvelope, verifyNativeSampleButton,
 } from "./_native-sample-replies.js";
 import { CLIENT_LINK_FIELD_NAME, sampleCustomerRoute } from "./_sample-customer-routing.js";
+import { SAMPLE_APPROVAL_NOTICE_FIELDS, recordApprovalNotices } from "./_sample-approval-notices.js";
 
 export const config = { api: { bodyParser: false } };
 
@@ -45,7 +46,7 @@ export default async function handler(req, res) {
       if (configuredSampleGroup() !== action.recipientChatId) throw new Error("Native reply group is not authorized.");
       assertGroupReplyParticipant(callback);
     }
-    const record = await airtableOperation(() => readAirtableRecord(action.recordId, [JOB_ID_FIELD_NAME, CLEAN_PHONE_FIELD_NAME, SAMPLE_FIELD_NAME, SAMPLE_APPROVED_FIELD_NAME, MAIN_FLOW_FIELD_NAME, CLIENT_LINK_FIELD_NAME]));
+    const record = await airtableOperation(() => readAirtableRecord(action.recordId, [JOB_ID_FIELD_NAME, CLEAN_PHONE_FIELD_NAME, SAMPLE_FIELD_NAME, SAMPLE_APPROVED_FIELD_NAME, MAIN_FLOW_FIELD_NAME, CLIENT_LINK_FIELD_NAME, ...SAMPLE_APPROVAL_NOTICE_FIELDS]));
     const fields = record.fields || {};
     if (action.sender === "printeam" && sampleCustomerRoute(fields).sender !== "printeam") {
       return res.status(409).json({ error: "The order's linked customer has changed. Send a new sample." });
@@ -60,19 +61,24 @@ export default async function handler(req, res) {
       // Airtable field or duplicated outbound prompt is introduced.
       return res.status(200).json({ ok: true, deliveryId: callback.deliveryId, action: "comment", commentInWhatsApp: true });
     }
-    if (fields[SAMPLE_APPROVED_FIELD_NAME] === true) {
+    const alreadyApproved = fields[SAMPLE_APPROVED_FIELD_NAME] === true;
+    if (alreadyApproved) {
       // Do not retrigger Airtable automations or move a subsequently advanced
       // order backwards when a delivery is repeated after an uncertain HTTP.
       if (fields[MAIN_FLOW_FIELD_NAME] !== SAMPLE_APPROVED_MAIN_FLOW_VALUE) {
         return res.status(409).json({ error: "The order is already checked as approved but its Main Flow differs. Review the order before sending another sample." });
       }
-      return res.status(200).json({ ok: true, deliveryId: callback.deliveryId, action: "approve", alreadyApproved: true });
+    } else {
+      await airtableOperation(() => patchAirtableRecord(action.recordId, {
+        [SAMPLE_APPROVED_FIELD_NAME]: true,
+        [MAIN_FLOW_FIELD_NAME]: SAMPLE_APPROVED_MAIN_FLOW_VALUE,
+      }));
     }
-    await airtableOperation(() => patchAirtableRecord(action.recordId, {
-      [SAMPLE_APPROVED_FIELD_NAME]: true,
-      [MAIN_FLOW_FIELD_NAME]: SAMPLE_APPROVED_MAIN_FLOW_VALUE,
-    }));
-    return res.status(200).json({ ok: true, deliveryId: callback.deliveryId, action: "approve", approved: true });
+    const notices = action.audience !== "group" && await recordApprovalNotices({ ...action, fields, occurredAt: callback.occurredAt });
+    return res.status(200).json({ ok: true, deliveryId: callback.deliveryId, action: "approve",
+      ...(alreadyApproved ? { alreadyApproved: true } : { approved: true }),
+      ...(notices ? { approvalNotices: notices } : {}),
+    });
   } catch (error) {
     const status = error?.statusCode || 400;
     // Never echo signed button IDs, HMAC values, or Airtable error bodies.

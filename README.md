@@ -120,6 +120,29 @@ Notifications sender itself is not an eligible group participant. Customer
 Changing/removing the configured group invalidates old group buttons without
 changing existing customer buttons or tokens.
 
+### Customer approval notices
+
+After a customer approval succeeds, the shared receiver can queue one text
+notice to SAMPLES and one to South. The message is
+`{customer} approved sample of {job name} {job id}`. It reads the current
+`Client name text`, `Job Name`, and `JOB ID` and requires an identifiable
+saved sample. Staff approval from a group and Comment actions do not send
+these customer approval notices.
+
+For a release covering both factories, set `SAMPLE_APPROVAL_NOTICE_SCOPE`
+to `shared` and set `SAMPLE_APPROVAL_NOTICES_SINCE` to the exact UTC cutover
+timestamp. Configure `SAMPLE_APPROVAL_PM_TOKEN` as the existing PM Notifications
+credential for SAMPLES. For South, set `SAMPLE_APPROVAL_SOUTH_SENDER` to `pm`
+for that same line or `personal` with `SAMPLE_APPROVAL_SOUTH_TOKEN` for Edward
+Personal. The configured sender must be a member of South and have the exact
+Platform group grant. Both routes must be configured before either notice is
+queued. Without explicit scope and cutover configuration, the approval flow
+runs without the notice step.
+
+Platform deduplicates each notice by the record, saved sample, and destination.
+An unconfirmed enqueue is logged separately from the approval result. A queued
+notice still requires a provider delivery receipt to confirm delivery.
+
 ### Printeam customer sender
 
 New submissions choose the customer sending line from the saved linked
