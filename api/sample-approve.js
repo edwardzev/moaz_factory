@@ -9,6 +9,7 @@ import {
   readAirtableRecord,
   verifyApprovalToken,
 } from "./_sample-utils.js";
+import { sampleFingerprint } from "./_native-sample-replies.js";
 import { SAMPLE_APPROVAL_NOTICE_FIELDS, recordApprovalNotices } from "./_sample-approval-notices.js";
 
 function page({ title, body, token = "", confirm = false }) {
@@ -48,12 +49,22 @@ export default async function handler(req, res) {
     const requestUrl = new URL(req.url, "http://localhost");
     const token = requestUrl.searchParams.get("token") || "";
     const approval = verifyApprovalToken(token);
-    const record = await readAirtableRecord(approval.recordId, [JOB_ID_FIELD_NAME, SAMPLE_FIELD_NAME, ...SAMPLE_APPROVAL_NOTICE_FIELDS]);
+    const ahmed = approval.producer === "ahmed";
+    const record = await readAirtableRecord(approval.recordId, ahmed
+      ? [JOB_ID_FIELD_NAME, SAMPLE_FIELD_NAME, SAMPLE_APPROVED_FIELD_NAME, MAIN_FLOW_FIELD_NAME, ...SAMPLE_APPROVAL_NOTICE_FIELDS]
+      : [JOB_ID_FIELD_NAME]);
     const currentJobId = String(record?.fields?.[JOB_ID_FIELD_NAME] ?? "");
     if (!currentJobId || currentJobId !== approval.jobId) {
       return res.status(409).send(page({
         title: "לא ניתן לאשר",
         body: "קישור האישור אינו תואם להזמנה.",
+      }));
+    }
+
+    if (ahmed && (!record.fields[SAMPLE_FIELD_NAME]?.length || sampleFingerprint(record.fields[SAMPLE_FIELD_NAME]) !== approval.fingerprint)) {
+      return res.status(409).send(page({
+        title: "לא ניתן לאשר",
+        body: "הדוגמה להזמנה השתנתה. יש לבקש קישור אישור חדש.",
       }));
     }
 
@@ -66,11 +77,20 @@ export default async function handler(req, res) {
       }));
     }
 
-    await patchAirtableRecord(approval.recordId, {
-      [SAMPLE_APPROVED_FIELD_NAME]: true,
-      [MAIN_FLOW_FIELD_NAME]: SAMPLE_APPROVED_MAIN_FLOW_VALUE,
-    });
-    await recordApprovalNotices({ ...approval, fields: record.fields, occurredAt: new Date().toISOString() });
+    const alreadyApproved = ahmed && record.fields[SAMPLE_APPROVED_FIELD_NAME] === true;
+    if (alreadyApproved && record.fields[MAIN_FLOW_FIELD_NAME] !== SAMPLE_APPROVED_MAIN_FLOW_VALUE) {
+      return res.status(409).send(page({
+        title: "לא ניתן לאשר",
+        body: "הדוגמה כבר אושרה וההזמנה בשלב אחר.",
+      }));
+    }
+    if (!alreadyApproved) {
+      await patchAirtableRecord(approval.recordId, {
+        [SAMPLE_APPROVED_FIELD_NAME]: true,
+        [MAIN_FLOW_FIELD_NAME]: SAMPLE_APPROVED_MAIN_FLOW_VALUE,
+      });
+    }
+    if (ahmed) await recordApprovalNotices({ ...approval, fields: record.fields, occurredAt: new Date().toISOString() });
 
     return res.status(200).send(page({
       title: "הדוגמה אושרה",

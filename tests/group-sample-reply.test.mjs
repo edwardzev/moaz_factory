@@ -20,7 +20,7 @@ const savedAssets = [
   { id: "attNOPQRSTUVWXYZA", url: "https://dl.airtable.com/video-two", filename: "two.mp4", type: "video/mp4" },
 ];
 const envKeys = ["AIRTABLE_TOKEN", "SAMPLE_APPROVAL_SECRET", "SAMPLE_NATIVE_REPLY_CALLBACK_SECRET", "SAMPLE_NATIVE_REPLY_ISSUER", "SAMPLE_NOTIFICATION_GROUP_ID", "MOAZ_PUBLIC_URL",
-  "SAMPLE_APPROVAL_NOTICE_SCOPE", "SAMPLE_APPROVAL_NOTICES_SINCE", "SAMPLE_APPROVAL_PM_TOKEN", "SAMPLE_APPROVAL_SOUTH_SENDER"];
+  "SAMPLE_APPROVAL_NOTICES_SINCE", "SAMPLE_APPROVAL_PM_TOKEN"];
 
 function setupEnv() {
   const before = Object.fromEntries(envKeys.map(key => [key, process.env[key]]));
@@ -28,8 +28,8 @@ function setupEnv() {
     AIRTABLE_TOKEN: "fixture-airtable", SAMPLE_APPROVAL_SECRET: "fixture-existing-secret",
     SAMPLE_NATIVE_REPLY_CALLBACK_SECRET: callbackSecret, SAMPLE_NATIVE_REPLY_ISSUER: JSON.stringify(issuer),
     SAMPLE_NOTIFICATION_GROUP_ID: groupId, MOAZ_PUBLIC_URL: "https://moaz.example",
-    SAMPLE_APPROVAL_NOTICE_SCOPE: "shared", SAMPLE_APPROVAL_NOTICES_SINCE: "2026-01-01T00:00:00Z",
-    SAMPLE_APPROVAL_PM_TOKEN: "fixture-pm-token", SAMPLE_APPROVAL_SOUTH_SENDER: "pm",
+    SAMPLE_APPROVAL_NOTICES_SINCE: "2026-01-01T00:00:00Z",
+    SAMPLE_APPROVAL_PM_TOKEN: "fixture-pm-token",
   });
   return () => { for (const [key, value] of Object.entries(before)) { if (value === undefined) delete process.env[key]; else process.env[key] = value; } };
 }
@@ -129,7 +129,18 @@ test("group sample callbacks require exact signed scope, participant, customer a
     assert.deepEqual(notices, []);
     const customerDuplicate = recorder(); await nativeHandler(callback(customerApprove, { recipientChatId: customerChatId, participantChatId: undefined }), customerDuplicate);
     assert.equal(customerDuplicate.statusCode, 200); assert.equal(customerDuplicate.body.alreadyApproved, true); assert.equal(patches.length, 1);
-    assert.equal(customerDuplicate.body.approvalNotices.status, "queued");
+    assert.equal(customerDuplicate.body.approvalNotices, undefined);
+    assert.deepEqual(notices, []);
+
+    const [version, payload] = customerApprove.split(".");
+    const key = crypto.createHmac("sha256", process.env.SAMPLE_APPROVAL_SECRET).update("moaz-native-sample-reply-v2").digest();
+    const ahmedKey = crypto.createHmac("sha256", key).update("ahmed-customer-sample-approval-v1").digest();
+    const ahmedApprove = [version, payload, crypto.createHmac("sha256", ahmedKey).update(payload).digest("base64url")].join(".");
+    assert.equal(verifyNativeSampleButton(ahmedApprove).producer, "ahmed");
+    const ahmed = recorder();
+    await nativeHandler(callback(ahmedApprove, { recipientChatId: customerChatId, participantChatId: undefined }), ahmed);
+    assert.equal(ahmed.statusCode, 200);
+    assert.equal(ahmed.body.approvalNotices.status, "queued");
     assert.deepEqual(notices, ["120363414125815359@g.us", "120363408115679594@g.us"].map(groupId => ({
       groupId, body: "Fixture customer approved sample of Fixture job 48441",
     })));

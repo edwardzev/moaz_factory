@@ -46,7 +46,7 @@ export default async function handler(req, res) {
       if (configuredSampleGroup() !== action.recipientChatId) throw new Error("Native reply group is not authorized.");
       assertGroupReplyParticipant(callback);
     }
-    const record = await airtableOperation(() => readAirtableRecord(action.recordId, [JOB_ID_FIELD_NAME, CLEAN_PHONE_FIELD_NAME, SAMPLE_FIELD_NAME, SAMPLE_APPROVED_FIELD_NAME, MAIN_FLOW_FIELD_NAME, CLIENT_LINK_FIELD_NAME, ...SAMPLE_APPROVAL_NOTICE_FIELDS]));
+    const record = await airtableOperation(() => readAirtableRecord(action.recordId, [JOB_ID_FIELD_NAME, CLEAN_PHONE_FIELD_NAME, SAMPLE_FIELD_NAME, SAMPLE_APPROVED_FIELD_NAME, MAIN_FLOW_FIELD_NAME, CLIENT_LINK_FIELD_NAME, ...(action.producer === "ahmed" ? SAMPLE_APPROVAL_NOTICE_FIELDS : [])]));
     const fields = record.fields || {};
     if (action.sender === "printeam" && sampleCustomerRoute(fields).sender !== "printeam") {
       return res.status(409).json({ error: "The order's linked customer has changed. Send a new sample." });
@@ -74,7 +74,7 @@ export default async function handler(req, res) {
         [MAIN_FLOW_FIELD_NAME]: SAMPLE_APPROVED_MAIN_FLOW_VALUE,
       }));
     }
-    const notices = action.audience !== "group" && await recordApprovalNotices({ ...action, fields, occurredAt: callback.occurredAt });
+    const notices = action.producer === "ahmed" && await recordApprovalNotices({ ...action, fields, occurredAt: callback.occurredAt });
     return res.status(200).json({ ok: true, deliveryId: callback.deliveryId, action: "approve",
       ...(alreadyApproved ? { alreadyApproved: true } : { approved: true }),
       ...(notices ? { approvalNotices: notices } : {}),

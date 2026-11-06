@@ -122,22 +122,19 @@ changing existing customer buttons or tokens.
 
 ### Customer approval notices
 
-After a customer approval succeeds, the shared receiver can queue one text
-notice to SAMPLES and one to South. The message is
-`{customer} approved sample of {job name} {job id}`. It reads the current
-`Client name text`, `Job Name`, and `JOB ID` and requires an identifiable
-saved sample. Staff approval from a group and Comment actions do not send
-these customer approval notices.
+After a customer approves an Ahmed-issued sample, PM Notifications queues one
+text notice to SAMPLES and one to South. The message is
+`{customer} approved sample of {job name} {job id}`. The receiver verifies
+Ahmed provenance from the signed customer button or fallback link and reads
+`Client name text`, `Job Name`, and `JOB ID` from the saved order.
+Staff approvals from a group, comments, Moaz approvals, and approvals using
+older capabilities continue their existing behavior.
 
-For a release covering both factories, set `SAMPLE_APPROVAL_NOTICE_SCOPE`
-to `shared` and set `SAMPLE_APPROVAL_NOTICES_SINCE` to the exact UTC cutover
-timestamp. Configure `SAMPLE_APPROVAL_PM_TOKEN` as the existing PM Notifications
-credential for SAMPLES. For South, set `SAMPLE_APPROVAL_SOUTH_SENDER` to `pm`
-for that same line or `personal` with `SAMPLE_APPROVAL_SOUTH_TOKEN` for Edward
-Personal. The configured sender must be a member of South and have the exact
-Platform group grant. Both routes must be configured before either notice is
-queued. Without explicit scope and cutover configuration, the approval flow
-runs without the notice step.
+Deploy this receiver before enabling `SAMPLE_APPROVAL_NOTICE_PROVENANCE=ahmed`
+on Ahmed. To enable the notices, configure `SAMPLE_APPROVAL_NOTICES_SINCE`
+as the UTC cutover time and set `SAMPLE_APPROVAL_PM_TOKEN` to the existing
+PM Notifications Platform API credential. The line must be a member of both
+groups and have the exact Platform grants for them.
 
 Platform deduplicates each notice by the record, saved sample, and destination.
 An unconfirmed enqueue is logged separately from the approval result. A queued

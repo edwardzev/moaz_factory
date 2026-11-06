@@ -126,9 +126,14 @@ export function verifyApprovalToken(value) {
     throw new Error("Invalid sample approval link.");
   }
   if (parsed?.v !== APPROVAL_TOKEN_VERSION) throw new Error("Invalid sample approval link.");
+  const ahmedSampleFingerprint = parsed.ahmedSampleFingerprint;
+  if (ahmedSampleFingerprint !== undefined && (typeof ahmedSampleFingerprint !== "string" || !/^[A-Za-z0-9_-]{22}$/.test(ahmedSampleFingerprint))) {
+    throw new Error("Invalid sample approval link.");
+  }
   return {
     recordId: assertRecordId(parsed.recordId),
     jobId: String(parsed.jobId ?? ""),
+    ...(ahmedSampleFingerprint ? { producer: "ahmed", fingerprint: ahmedSampleFingerprint } : {}),
   };
 }
 
