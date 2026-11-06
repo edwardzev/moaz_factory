@@ -122,13 +122,17 @@ changing existing customer buttons or tokens.
 
 ### Customer approval notices
 
-After a customer approves an Ahmed-issued sample, PM Notifications queues one
-text notice to SAMPLES and one to South. The message is
-`{customer} approved sample of {job name} {job id}`. The receiver verifies
-Ahmed provenance from the signed customer button or fallback link and reads
-`Client name text`, `Job Name`, and `JOB ID` from the saved order.
-Staff approvals from a group, comments, Moaz approvals, and approvals using
-older capabilities continue their existing behavior.
+PM Notifications queues `{customer} approved sample of {job name} {job id}`
+using the saved Airtable `Client name text`, `Job Name`, and `JOB ID`.
+The factory route comes from the signed customer capability:
+
+- Ahmed-issued customer Approve or fallback confirmation → SAMPLES and South.
+- Moaz-issued customer Approve → SAMPLES and PM- NOTRH.
+
+Group-member approvals, Comment, and untagged legacy capabilities continue
+their existing behavior without queueing a notice. A later verified Moaz
+customer tap can announce a sample already approved by the group while the
+order is still in Sample Approved; later stages are not moved backwards.
 
 Deploy this receiver before enabling `SAMPLE_APPROVAL_NOTICE_PROVENANCE=ahmed`
 on Ahmed. To enable the notices, configure `SAMPLE_APPROVAL_NOTICES_SINCE`
@@ -136,9 +140,20 @@ as the UTC cutover time and set `SAMPLE_APPROVAL_PM_TOKEN` to the existing
 PM Notifications Platform API credential. The line must be a member of both
 groups and have the exact Platform grants for them.
 
-Platform deduplicates each notice by the record, saved sample, and destination.
-An unconfirmed enqueue is logged separately from the approval result. A queued
-notice still requires a provider delivery receipt to confirm delivery.
+Moaz's North notices are off by default. Confirm `SAMPLE_NOTIFICATION_GROUP_ID`
+is the existing SAMPLES group and `SAMPLE_APPROVAL_NOTICE_NORTH_GROUP_ID` is
+the verified PM- NOTRH group. Both must have exact grants on PM Notifications.
+Set `SAMPLE_APPROVAL_NOTICE_PM_TOKEN` to the existing PM token as a
+production-only server secret. `SAMPLE_APPROVAL_NOTICES_ENABLED=true` enables
+Moaz notice dispatch and tags newly issued Moaz customer buttons. Before
+queueing either notice, passive health must confirm the exact PM sending line.
+Existing submission IDs and previously issued buttons are unchanged; do not
+resubmit old samples merely to tag their buttons.
+
+Both factory routes use the same permanent Platform idempotency namespace
+for the record, saved sample and destination. SAMPLES cannot receive a second
+copy for that identity. Unconfirmed notices are logged separately from the
+approval result; queue acceptance is not delivery.
 
 ### Printeam customer sender
 

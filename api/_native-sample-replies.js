@@ -60,8 +60,14 @@ function actionKey() {
   return crypto.createHmac("sha256", secret).update("moaz-native-sample-reply-v2").digest();
 }
 
-function ahmedApprovalKey(key) {
-  return crypto.createHmac("sha256", key).update("ahmed-customer-sample-approval-v1").digest();
+function producerApprovalKey(key, producer) {
+  return crypto.createHmac("sha256", key).update(`${producer}-customer-sample-approval-v1`).digest();
+}
+
+function moazIssuanceKey(key, producer) {
+  if (producer == null) return key;
+  if (producer !== "moaz") throw new Error("Invalid sample producer.");
+  return producerApprovalKey(key, producer);
 }
 
 function verifyCustomerSignature(payload, signature, key) {
@@ -69,18 +75,20 @@ function verifyCustomerSignature(payload, signature, key) {
   if (supplied.length !== 32) throw new Error("Invalid native sample button.");
   const expected = crypto.createHmac("sha256", key).update(payload).digest();
   if (crypto.timingSafeEqual(expected, supplied)) return {};
-  const ahmed = crypto.createHmac("sha256", ahmedApprovalKey(key)).update(payload).digest();
-  if (crypto.timingSafeEqual(ahmed, supplied)) return { producer: "ahmed" };
+  for (const producer of ["ahmed", "moaz"]) {
+    const tagged = crypto.createHmac("sha256", producerApprovalKey(key, producer)).update(payload).digest();
+    if (crypto.timingSafeEqual(tagged, supplied)) return { producer };
+  }
   throw new Error("Invalid native sample button.");
 }
 
-export function createNativeSampleButton({ recordId, jobId, recipientChatId, submissionId, fingerprint, action }) {
+export function createNativeSampleButton({ recordId, jobId, recipientChatId, submissionId, fingerprint, action, producer }) {
   if (!/^[a-f0-9]{32}$/.test(submissionId) || !/^[A-Za-z0-9_-]{22}$/.test(fingerprint) || !["approve", "comment"].includes(action)) {
     throw new Error("Invalid sample reply capability.");
   }
   if (!/^[1-9][0-9]{7,14}@s\.whatsapp\.net$/.test(recipientChatId)) throw new Error("Invalid sample recipient.");
   const payload = Buffer.from(JSON.stringify([2, assertRecordId(recordId), String(jobId), recipientChatId.split("@")[0], submissionId, fingerprint, action === "approve" ? "a" : "c"])).toString("base64url");
-  const signature = crypto.createHmac("sha256", actionKey()).update(payload).digest("base64url");
+  const signature = crypto.createHmac("sha256", moazIssuanceKey(actionKey(), producer)).update(payload).digest("base64url");
   const id = `ms2.${payload}.${signature}`;
   if (Buffer.byteLength(id) > 256) throw new Error("The order identifier is too long for a native sample button.");
   return id;
@@ -92,14 +100,14 @@ function printeamActionKey() {
   return crypto.createHmac("sha256", actionKey()).update("moaz-native-sample-printeam-reply-v4").digest();
 }
 
-export function createNativePrinteamSampleButton({ recordId, jobId, recipientChatId, submissionId, fingerprint, action }) {
+export function createNativePrinteamSampleButton({ recordId, jobId, recipientChatId, submissionId, fingerprint, action, producer }) {
   if (typeof jobId !== "string" || !jobId || typeof submissionId !== "string" || !/^[a-f0-9]{32}$/.test(submissionId)
     || typeof fingerprint !== "string" || !/^[A-Za-z0-9_-]{22}$/.test(fingerprint)
     || !["approve", "comment"].includes(action) || typeof recipientChatId !== "string" || !INDIVIDUAL_CHAT_ID.test(recipientChatId)) {
     throw new Error("Invalid Printeam sample reply capability.");
   }
   const payload = Buffer.from(JSON.stringify([4, assertRecordId(recordId), jobId, recipientChatId.split("@")[0], submissionId, fingerprint, action === "approve" ? "a" : "c"])).toString("base64url");
-  const signature = crypto.createHmac("sha256", printeamActionKey()).update(payload).digest("base64url");
+  const signature = crypto.createHmac("sha256", moazIssuanceKey(printeamActionKey(), producer)).update(payload).digest("base64url");
   const id = `ms4.${payload}.${signature}`;
   if (Buffer.byteLength(id) > 256) throw new Error("The order identifier is too long for a native Printeam sample button.");
   return id;
